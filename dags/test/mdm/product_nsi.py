@@ -19,19 +19,11 @@ DATA_FILE_PATH = f"/tmp/{DICTIONARY_NAME}_nsi.json"
 INDEX_NAME = f"{DICTIONARY_NAME}_nsi"
 
 
-def get_token() -> str:
-    access_token = Variable.get("access_token")
-    return f"Bearer {access_token}"
-
-
-def get_elasticsearch_password() -> str:
-    el_password = Variable.get("elasticsearch_password")
-    return el_password
 
 
 def fetch_data_callable(**context):
     """Получаем все товары из NSI с многопоточностью и сохраняем в файл."""
-    url = f"https://api.mdev.kz/nsi/{DICTIONARY_NAME}"
+    url = f"http://nsi.default/{DICTIONARY_NAME}"
     headers = {"Authorization": get_token()}
     page_size = 1000
 
@@ -92,10 +84,10 @@ def upsert_to_es_callable(**context):
         print("Data file not found.")
         return
 
-    hosts = ["https://mdm.zeon.mdev.kz"]
+    hosts = ["http://mdm.default:9200"]
     es_hook = ElasticsearchPythonHook(
         hosts=hosts,
-        es_conn_args={"basic_auth": ("mdm", get_elasticsearch_password())},
+        
     )
     client = es_hook.get_conn
 

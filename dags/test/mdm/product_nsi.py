@@ -14,8 +14,8 @@ from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
 
-DATA_FILE_PATH = "/tmp/product_nsi.json"
 DICTIONARY_NAME = "product"
+DATA_FILE_PATH = f"/tmp/{DICTIONARY_NAME}_nsi.json"
 INDEX_NAME = f"{DICTIONARY_NAME}_nsi"
 
 

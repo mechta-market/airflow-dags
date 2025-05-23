@@ -3,7 +3,7 @@ import os
 import requests
 import pendulum
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from airflow.sdk import Variable
+from airflow import Variable
 from airflow.decorators import dag, task
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 from elasticsearch import helpers

@@ -19,12 +19,9 @@ DATA_FILE_PATH = f"/tmp/{DICTIONARY_NAME}_nsi.json"
 INDEX_NAME = f"{DICTIONARY_NAME}_nsi"
 
 
-
-
 def fetch_data_callable(**context):
     """Получаем все товары из NSI с многопоточностью и сохраняем в файл."""
     url = f"http://nsi.default/{DICTIONARY_NAME}"
-    headers = {"Authorization": get_token()}
     page_size = 1000
 
     def fetch_page(page: int) -> list:
@@ -35,7 +32,6 @@ def fetch_data_callable(**context):
                 "list_params.page_size": page_size,
                 "list_params.with_total_count": True,
             },
-            headers=headers,
             timeout=10,
         )
         resp.raise_for_status()
@@ -45,7 +41,6 @@ def fetch_data_callable(**context):
     initial_response = requests.get(
         url,
         params={"list_params.only_count": True},
-        headers=headers,
         timeout=10,
     )
     initial_response.raise_for_status()
@@ -87,7 +82,6 @@ def upsert_to_es_callable(**context):
     hosts = ["http://mdm.default:9200"]
     es_hook = ElasticsearchPythonHook(
         hosts=hosts,
-        
     )
     client = es_hook.get_conn
 

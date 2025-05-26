@@ -9,7 +9,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.models import Variable
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
+
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
 
 default_args = {
     "owner": "Olzhas",
@@ -158,7 +163,6 @@ class DocumentProduct:
         self.categories = self._parse_categories(p.get("breadcrumbs", []))
         self.pre_order = self._parse_preorder(p.get("pre_order", None))
 
-        # Заполняем свойства из PropertyModel
         self.properties = self._parse_properties(p.get("property_model", {}))
 
     def _parse_categories(self, breadcrumbs):
@@ -271,7 +275,7 @@ def encode_document_product(p: dict) -> dict:
     dp = DocumentProduct(p)
     return dp.__dict__
 
-# task #2: Трансформация информации об каждом товаре в целевой формат и сохранить во временном локальном хранилище.
+# task #2: Transform product data to a target format and store in temporary store.
 def transform_data_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="extract_data_file_path", task_ids="extract_data_task"
@@ -308,24 +312,53 @@ def transform_data_callable(**context):
     logging.info("Transformed data saved to file succesfully")
     context["ti"].xcom_push(key="transform_data_file_path", value=TRANSFORM_DATA_FILE_PATH)
 
-#####################################################################################################################
+##################################################################################
 
-# task #3: Сохранить информацию о товарах в Elasticsearch.
+# task #3: Upload transformed product data to Elasticsearch.
 def load_data_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="transform_data_file_path", task_ids="transform_data_task"
     )
 
-    # Load extracted data
+    if not file_path or not os.path.exists(file_path):
+        logging.error(f"File not found: {file_path}")
+        return
+
     with open(file_path, "r", encoding="utf-8") as f:
         transformed_products = json.load(f)
     
-
-    logging.info(f"Products count: {len(transformed_products)}")
-    print(transformed_products[0])
-
     # INDEX_NAME = Variable.get(f"{DAG_ID}.elastic_index", default_var="product_v1")
+    INDEX_NAME = "product_v1"
 
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
+
+    actions = [
+        {
+            "_op_type": "update",
+            "_index": INDEX_NAME,
+            "_id": transformed_products.get("id"),
+            "doc": transformed_products,
+            "doc_as_upsert": True,
+        }
+        for product in transformed_products
+        if product.get("id")
+    ]
+
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
+        )
+        logging.info(f"Successfully updated {success} documents.")
+        if errors:
+            logging.error(f"Errors encountered during bulk update: {errors}")
+    except BulkIndexError as bulk_error:
+        raise Exception(f"Bulk update failed: {bulk_error}") 
+
+#############################################################################
 
 def clean_tmp_file(file_path: str):
     if file_path == "":
@@ -336,7 +369,6 @@ def clean_tmp_file(file_path: str):
         logging.info(f"Temporary file removed: {file_path}")
     else:
         logging.info(f"File does not exist: {file_path}")
-
 
 # task #4: Удалить временные данные.
 def cleanup_temp_files_callable(**context):
@@ -350,6 +382,7 @@ def cleanup_temp_files_callable(**context):
     )
     clean_tmp_file(file_path)
 
+#############################################################################
 
 with DAG(
     dag_id=DAG_ID,

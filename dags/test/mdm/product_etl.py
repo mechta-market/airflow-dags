@@ -137,7 +137,7 @@ class DocumentProduct:
         self.id = p.get("id", "")
         self.code = p.get("code", "")
         self.slug = p.get("slug", "")
-        self.created_at = p.get("created_at", datetime.datetime.now())
+        self.created_at = p.get("created_at", datetime.now())
 
         self.type = p.get("type", 0)
         self.service_type = p.get("service_type", 0)
@@ -271,7 +271,6 @@ def encode_document_product(p: dict) -> dict:
     dp = DocumentProduct(p)
     return dp.__dict__
 
-
 # task #2: Трансформация информации об каждом товаре в целевой формат и сохранить во временном локальном хранилище.
 def transform_data_callable(**context):
     file_path = context["ti"].xcom_pull(
@@ -333,6 +332,11 @@ def clean_tmp_file(file_path: str):
 def cleanup_temp_files_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="extract_data_file_path", task_ids="extract_data_task"
+    )
+    clean_tmp_file(file_path)
+
+    file_path = context["ti"].xcom_pull(
+        key="transform_data_file_path", task_ids="transform_data_task"
     )
     clean_tmp_file(file_path)
 

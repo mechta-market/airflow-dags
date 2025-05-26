@@ -31,7 +31,7 @@ def normalize_zero_uuid_fields(item: dict, fields: list[str]) -> dict:
 
 def fetch_data_callable(**context) -> None:
     """Получаем данные из 1c и сохраняем в XCom."""
-    response = request_to_1c()
+    response = request_to_1c(host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME)
     if not response.get("success", False):
         logging.error(f"Error: {response.get('error_code')}")
         return

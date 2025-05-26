@@ -250,14 +250,14 @@ class DocumentProduct:
                     elif attr_type == "number":
                         number = val_i18n.get(DEFAULT_LANGUAGE, "")
                         for lang in TARGET_LANGUAGES:
-                            unit = data.get("munit_i18n", {}).get(lang, "")
+                            unit = data.get("m_unit_i18n", {}).get(lang, "")
                             p["value"][lang] = f"{number} {unit}".strip()
                     elif attr_type in ("select", "multi-select"):
                         options = data.get("options", [])
                         default_val = val_i18n.get(DEFAULT_LANGUAGE, "")
                         for option in options:
                             if option.get("value") == default_val:
-                                label_i18n = option.get("LabelI18n", {})
+                                label_i18n = option.get("label_i18n", {})
                                 for lang in TARGET_LANGUAGES:
                                     p["value"][lang] = label_i18n.get(lang, "")
                                 break

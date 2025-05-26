@@ -1,11 +1,11 @@
 import requests
-import json
+import orjson
+import gzip
 import time
 import os
 import logging
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -119,13 +119,13 @@ def extract_data_callable(**context):
 
     # Save collected products data.
     try:
-        with open(EXTRACT_DATA_FILE_PATH, "w", encoding="utf-8") as f:
-            json.dump(collected_products, f, ensure_ascii=False)
+        with gzip.open(EXTRACT_DATA_FILE_PATH + ".json.gz", "wb") as f:
+            f.write(orjson.dump(collected_products))
     except IOError as e:
         raise Exception(f"Task failed: couldn't save file to {EXTRACT_DATA_FILE_PATH}") from e
     
     logging.info("Extracted data saved to file succesfully")
-    context["ti"].xcom_push(key="extract_data_file_path", value=EXTRACT_DATA_FILE_PATH)
+    context["ti"].xcom_push(key="extract_data_file_path", value=(EXTRACT_DATA_FILE_PATH + ".json.gz"))
 
 
 # task #2: Трансформация информации об каждом товаре в целевой формат и сохранить во временном локальном хранилище.
@@ -135,12 +135,13 @@ def transform_data_callable(**context):
     )
 
     # Load extracted data
-    with open(file_path, "r", encoding="utf-8") as f:
-        items = json.load(f)
+    with gzip.open(file_path, "wb") as f:
+        collected_products = orjson.loads(f.read())
 
-    logging.info(f"Products count: {len(items)}")
+    logging.info(f"Products count: {len(collected_products)}")
 
     # Transform data
+
 
     # Save data to temporary storage
 

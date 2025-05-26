@@ -1,5 +1,6 @@
 import json
 import requests
+from typing import Any
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -12,7 +13,7 @@ DICTIONARY_NAME = "city"
 INDEX_NAME = f"{DICTIONARY_NAME}_1c"
 
 
-def Request_to_1C() -> None:
+def Request_to_1C() -> Any:
     host = Variable.get("1c_gw_host")
     url = f"http://{host}/getbaseinfo/{DICTIONARY_NAME}"
 

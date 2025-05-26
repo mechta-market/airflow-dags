@@ -1,22 +1,31 @@
 import json
 import requests
 from datetime import datetime, timedelta
+
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
+
 # from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 DICTIONARY_NAME = "city"
 INDEX_NAME = f"{DICTIONARY_NAME}_1c"
 
 
-def fetch_data_callable(**context):
-    """Получаем данные из 1c и сохраняем в XCom."""
-    url = f"http://1c.mechta.market/getbaseinfo/{DICTIONARY_NAME}"
+def Request_to_1C() -> None:
+    host = Variable.get("1c_gw_host")
+    url = f"http://{host}/getbaseinfo/{DICTIONARY_NAME}"
 
     resp = requests.post(url, timeout=30)
     resp.raise_for_status()
     payload = resp.json()
     results = payload.get("results", [])
+    return results
+
+
+def fetch_data_callable(**context):
+    """Получаем данные из 1c и сохраняем в XCom."""
+    results = Request_to_1C()
     context["ti"].xcom_push(key="fetched_data", value=results)
 
 

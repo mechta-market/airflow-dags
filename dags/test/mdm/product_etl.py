@@ -153,7 +153,7 @@ def clean_tmp_file(file_path: str):
 # task #4: Удалить временные данные.
 def cleanup_temp_files_callable(**context):
     file_path = context["ti"].xcom_pull(
-        key="data_file_path", task_ids="fetch_data_task"
+        key="extract_data_file_path", task_ids="extract_data_task"
     )
     clean_tmp_file(file_path)
 

@@ -1,6 +1,5 @@
 import requests
 import json
-import gzip
 import time
 import os
 import logging
@@ -119,13 +118,13 @@ def extract_data_callable(**context):
 
     # Save collected products data.
     try:
-        with gzip.open(EXTRACT_DATA_FILE_PATH + ".json.gz", "wt", encoding="utf-8") as f:
-            json.dump(collected_products, f)
+        with open(EXTRACT_DATA_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(collected_products, f, ensure_ascii=False)
     except IOError as e:
         raise Exception(f"Task failed: couldn't save file to {EXTRACT_DATA_FILE_PATH}") from e
     
     logging.info("Extracted data saved to file succesfully")
-    context["ti"].xcom_push(key="extract_data_file_path", value=(EXTRACT_DATA_FILE_PATH + ".json.gz"))
+    context["ti"].xcom_push(key="extract_data_file_path", value=EXTRACT_DATA_FILE_PATH)
 
 
 # task #2: Трансформация информации об каждом товаре в целевой формат и сохранить во временном локальном хранилище.
@@ -135,7 +134,7 @@ def transform_data_callable(**context):
     )
 
     # Load extracted data
-    with gzip.open(file_path, "rt", encoding="utf-8") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         collected_products = json.load(f)
 
     logging.info(f"Products count: {len(collected_products)}")

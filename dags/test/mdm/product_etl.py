@@ -311,10 +311,10 @@ def transform_data_callable(**context):
 #####################################################################################################################
 
 # task #3: Сохранить информацию о товарах в Elasticsearch.
-# def load_data_callable(file_path: str):
-#     INDEX_NAME = Variable.get(f"{DAG_ID}.elastic_index", default_var="product_v1")
-#
-#     pass
+def load_data_callable(**context):
+    # INDEX_NAME = Variable.get(f"{DAG_ID}.elastic_index", default_var="product_v1")
+
+    pass
 
 
 def clean_tmp_file(file_path: str):
@@ -362,6 +362,13 @@ with DAG(
         provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
+
+    load_data = PythonOperator(
+        task_id="load_data_task",
+        python_callable=load_data_callable,
+        provide_context=True,
+        trigger_rule=TriggerRule.ALL_SUCCESS,
+    )
     
     cleanup_temp_files = PythonOperator(
         task_id="cleanup_temp_files_task",
@@ -370,4 +377,4 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    extract_data >> transform_data >> cleanup_temp_files
+    extract_data >> transform_data >> load_data >> cleanup_temp_files

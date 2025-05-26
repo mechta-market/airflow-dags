@@ -1,6 +1,6 @@
 import json
 import logging
-import requests
+# import requests
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -8,26 +8,28 @@ from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
+from helpers.utils import request_to_1c, normalize_zero_uuid_fields, ZERO_UUID
+
 
 DICTIONARY_NAME = "city"
 INDEX_NAME = f"{DICTIONARY_NAME}_1c"
-ZERO_UUID = "00000000-0000-0000-0000-000000000000"
+# ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
 
-def request_to_1c(host: str, dic_name: str) -> dict:
-    url = f"{host}/send/by_db_name/AstOffice/getbaseinfo/{dic_name}"
+# def request_to_1c(host: str, dic_name: str) -> dict:
+#     url = f"{host}/send/by_db_name/AstOffice/getbaseinfo/{dic_name}"
 
-    resp = requests.post(url, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+#     resp = requests.post(url, timeout=30)
+#     resp.raise_for_status()
+#     return resp.json()
 
 
-def normalize_zero_uuid_fields(item: dict, fields: list[str]) -> dict:
-    """Заменяет ZERO_UUID на пустую строку в указанных полях."""
-    for field in fields:
-        if item.get(field) == ZERO_UUID:
-            item[field] = ""
-    return item
+# def normalize_zero_uuid_fields(item: dict, fields: list[str]) -> dict:
+#     """Заменяет ZERO_UUID на пустую строку в указанных полях."""
+#     for field in fields:
+#         if item.get(field) == ZERO_UUID:
+#             item[field] = ""
+#     return item
 
 
 def fetch_data_callable(**context) -> None:

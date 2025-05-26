@@ -1,6 +1,5 @@
 import json
 import logging
-from helpers import request_to_1c, normalize_zero_uuid_fields, ZERO_UUID
 from datetime import datetime, timedelta
 
 from airflow import DAG

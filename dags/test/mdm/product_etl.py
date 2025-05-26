@@ -1,5 +1,5 @@
 import requests
-import ujson as json
+import json
 import gzip
 import time
 import os
@@ -41,7 +41,7 @@ def fetch_with_retry(url: str, params=None, retries=MAX_RETRIES):
 # task #1: Get raw product data from NSI service and store in temporary storage.
 def extract_data_callable(**context):
     BASE_URL = "http://nsi.default"
-    MAX_WORKERS = 5
+    MAX_WORKERS = 7
 
     EXTRACT_DATA_FILE_PATH = f"/tmp/{DAG_ID}.extract_data.json"
 
@@ -119,7 +119,7 @@ def extract_data_callable(**context):
 
     # Save collected products data.
     try:
-        with gzip.open(EXTRACT_DATA_FILE_PATH + ".json.gz", "wt", encoding="utf-8") as f:
+        with gzip.open(EXTRACT_DATA_FILE_PATH + ".json.gz", "w", encoding="utf-8") as f:
             json.dump(collected_products, f)
     except IOError as e:
         raise Exception(f"Task failed: couldn't save file to {EXTRACT_DATA_FILE_PATH}") from e
@@ -135,8 +135,8 @@ def transform_data_callable(**context):
     )
 
     # Load extracted data
-    with gzip.open(file_path, "rt", encoding="utf-8") as f:
-        collected_products = json.loads(f)
+    with gzip.open(file_path, "r", encoding="utf-8") as f:
+        collected_products = json.load(f)
 
     logging.info(f"Products count: {len(collected_products)}")
 

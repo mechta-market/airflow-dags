@@ -27,6 +27,7 @@ def Request_to_1C() -> Any:
 def fetch_data_callable(**context):
     """Получаем данные из 1c и сохраняем в XCom."""
     results = Request_to_1C()
+    print(results)
     context["ti"].xcom_push(key="fetched_data", value=results)
 
 

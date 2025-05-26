@@ -46,48 +46,56 @@ def fetch_with_retry(url: str, params=None, retries=MAX_RETRIES):
 # task #1: Get raw product data from NSI service and store in temporary storage.
 def extract_data_callable(**context):
     BASE_URL = "http://nsi.default"
+    MAX_WORKERS = 3
 
     # Fetch required product_ids
 
-    def fetch_product_ids():
-        product_ids = []
-        page = 0
-        page_size = 1000
+    nsi_product_ids = []
+    page_size = 1000
 
-        while True:
+    initial_response = requests.get(
+        f"{BASE_URL}/product",
+        params={"list_params.only_count": True},
+        timeout=10,
+    )
+    initial_response.raise_for_status()
+    initial_payload = initial_response.json()
+    total_count = int(initial_payload.get("pagination_info", {}).get("total_count", 0))
+    total_pages = (total_count + page_size - 1) // page_size
+
+    def fetch_page(page: int):
+        try:
+            data = fetch_with_retry(
+                f"{BASE_URL}/product",
+                params={
+                    "list_params.page": page,
+                    "list_params.page_size": page_size,
+                    "archived": False,
+                },
+            )
+            return [item["id"] for item in data.get("results", []) if "id" in item]
+        except Exception as e:
+            logging.error(f"Ошибка при получении страницы {page}: {e}")
+            return []
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_to_page = {
+            executor.submit(fetch_page, page): page for page in range(total_pages)
+        }
+
+        for future in as_completed(future_to_page):
+            page = future_to_page[future]
             try:
-                data = fetch_with_retry(
-                    f"{BASE_URL}/product",
-                    params={
-                        "list_params.page": page,
-                        "list_params.page_size": page_size,
-                        "archived": False,
-                    }
-                )
-
-                batch = data.get("results", [])
-                if not batch:
-                    break
-
-                batch_ids = [item["id"] for item in batch if "id" in item]
-                product_ids.extend(batch_ids)
-                page += 1
-
-            except Exception as e:
-                logging.error(f"Error fetching page: {page}, error: {e}")
-                break
-        
-        return product_ids
-    
-    nsi_product_ids = fetch_product_ids()
+                ids = future.result()
+                nsi_product_ids.extend(ids)
+            except Exception as exc:
+                logging.error(f"Error in processing page {page}: {exc}")
 
     # Fetch product details data.
 
     collected_products = []
-    lock = Lock()
-    MAX_WORKERS = 3
 
-    def fetch_product_details(id: str, lock, collected_products):
+    def fetch_product_details(id: str):
         url = f"{BASE_URL}/product/{id}"
         params = {
             "with_properties": True,
@@ -97,25 +105,27 @@ def extract_data_callable(**context):
         }
 
         try:
-            data = fetch_with_retry(url, params=params)
-            with lock:
-                collected_products.append(data)
+            return fetch_with_retry(url, params=params)
         except Exception as e:
             logging.error(f"fetch_product_details.fetch_with_retry: id: {id}, error: {e}")
+            return None
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(fetch_product_details, pid, lock, collected_products) for pid in nsi_product_ids]
+    with ThreadPoolExecutor(...) as executor:
+        futures = [executor.submit(fetch_product_details, pid) for pid in nsi_product_ids]
+
         for future in as_completed(futures):
-            pass
+            result = future.result()
+            if result:
+                collected_products.append(result)
 
     logging.info(f"Products are extracted: {len(collected_products)}")
 
     # Save collected products data.
     try:
         with open(EXTRACT_DATA_FILE_PATH, "w", encoding="utf-8") as f:
-            json.dump(collected_products, f, ensure_ascii=False, indent=2)
+            json.dump(collected_products, f, ensure_ascii=False)
     except IOError as e:
-        logging.error(f"Error saving file: {e}")
+        raise Exception(f"Task failed: couldn't save file to {EXTRACT_DATA_FILE_PATH}") from e
     
     logging.info("Extracted data saved to file succesfully")
     context["ti"].xcom_push(key="extract_data_file_path", value=EXTRACT_DATA_FILE_PATH)

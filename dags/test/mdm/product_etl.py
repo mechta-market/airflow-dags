@@ -1,5 +1,5 @@
 import requests
-import orjson
+import ujson as json
 import gzip
 import time
 import os
@@ -119,8 +119,8 @@ def extract_data_callable(**context):
 
     # Save collected products data.
     try:
-        with gzip.open(EXTRACT_DATA_FILE_PATH + ".json.gz", "wb") as f:
-            f.write(orjson.dump(collected_products))
+        with gzip.open(EXTRACT_DATA_FILE_PATH + ".json.gz", "wt", encoding="utf-8") as f:
+            json.dump(collected_products, f)
     except IOError as e:
         raise Exception(f"Task failed: couldn't save file to {EXTRACT_DATA_FILE_PATH}") from e
     
@@ -135,8 +135,8 @@ def transform_data_callable(**context):
     )
 
     # Load extracted data
-    with gzip.open(file_path, "wb") as f:
-        collected_products = orjson.loads(f.read())
+    with gzip.open(file_path, "rt", encoding="utf-8") as f:
+        collected_products = json.loads(f)
 
     logging.info(f"Products count: {len(collected_products)}")
 

@@ -3,6 +3,7 @@ import json
 import time
 import os
 import logging
+from typing import List, Dict, Any
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -126,6 +127,150 @@ def extract_data_callable(**context):
     logging.info("Extracted data saved to file succesfully")
     context["ti"].xcom_push(key="extract_data_file_path", value=EXTRACT_DATA_FILE_PATH)
 
+################################################################################
+
+DEFAULT_LANGUAGE = "ru"
+TARGET_LANGUAGES = ["ru", "kz"]
+
+class DocumentProduct:
+    def __init__(self, p: dict):
+        self.id = p.get("id", "")
+        self.code = p.get("code", "")
+        self.slug = p.get("slug", "")
+        self.created_at = p.get("created_at", datetime.datetime.now())
+
+        self.type = p.get("type", 0)
+        self.service_type = p.get("service_type", 0)
+
+        self.category_id = p.get("category_id", "")
+        self.group_id = p.get("group_id", "")
+        self.published = p.get("published", False)
+        self.kbt = p.get("kbt", False)
+        self.not_available_for_offline_sell = p.get("not_available_for_offline_sell", False)
+        self.not_available_for_online_sell = p.get("not_available_for_online_sell", False)
+        self.imei_track = p.get("imei_track", False)
+
+        self.name_i18n = {lang: p.get("name_i18n", {}).get(lang, "") for lang in TARGET_LANGUAGES}
+        self.description_i18n = {lang: p.get("description_i18n", {}).get(lang, "") for lang in TARGET_LANGUAGES}
+
+        self.image_urls = p.get("image_urls", [])
+
+        self.categories = self._parse_categories(p.get("breadcrumbs", []))
+        self.pre_order = self._parse_preorder(p.get("pre_order", None))
+
+        # Заполняем свойства из PropertyModel
+        self.properties = self._parse_properties(p.get("property_model", {}))
+
+    def _parse_categories(self, breadcrumbs):
+        categories = []
+        for cat in breadcrumbs:
+            if not cat.get("id"):
+                continue
+            categories.append({
+                "id": cat.get("id", ""),
+                "slug": cat.get("slug", ""),
+                "depth": cat.get("depth", 0),
+                "name_i18n": {
+                    "ru": cat.get("name_i18n", {}).get("ru", ""),
+                    "kz": cat.get("name_i18n", {}).get("kz", ""),
+                }
+            })
+        return categories
+
+    def _parse_preorder(self, pre_order):
+        if not pre_order:
+            return None
+        return {
+            "prepayment_amount": pre_order.get("prepayment_amount", 0),
+            "prepayment_percent": pre_order.get("prepayment_percent", 0),
+            "active_from": pre_order.get("active_from"),
+            "active_to": pre_order.get("active_to"),
+            "sell_from": pre_order.get("sell_from"),
+            "count": pre_order.get("count", 0),
+        }
+
+    def _parse_properties(self, property_model: dict) -> List[Dict[str, Any]]:
+        properties = []
+        ord_counter = 0
+
+        groups = property_model.get("groups", [])
+        for group in groups:
+            flags = group.get("flags", {})
+            if flags.get("hidden", False):
+                continue  # Пропускаем скрытые группы
+
+            attributes = group.get("attributes", [])
+            for attr in attributes:
+                ord_counter += 1
+
+                if not attr.get("as_filter", False):
+                    continue
+                if not attr.get("slug"):
+                    continue
+                if not attr.get("value"):
+                    continue
+
+                slugs = attr["value"].get("slugs", [])
+                values_i18n = attr["value"].get("values_i18n", [])  # Список словарей с локализацией
+
+                for i, v_slug in enumerate(slugs):
+                    if not v_slug:
+                        continue
+                    
+                    p = {
+                        "name_slug": attr.get("slug"),
+                        "name": {},
+                        "value_slug": v_slug,
+                        "value": {},
+                        "ord": ord_counter,
+                    }
+
+                    name = attr.get("name_i18n", {})
+                    for lang in TARGET_LANGUAGES:
+                        p["name"][lang] = name.get(lang, "")
+
+                    attr_type = attr.get("type", "")
+                    data = attr.get("data", {})
+                    if i < len(values_i18n):
+                        val_i18n = values_i18n[i]
+                    else:
+                        val_i18n = {}
+
+                    if attr_type == "boolean":
+                        default_val = val_i18n.get(DEFAULT_LANGUAGE, "")
+                        if default_val == "true":
+                            p["value"]["ru"] = "Да"
+                            p["value"]["kz"] = "Иә"
+                        else:
+                            p["value"]["ru"] = "Нет"
+                            p["value"]["kz"] = "Жоқ"
+                    elif attr_type == "text":
+                        for lang in TARGET_LANGUAGES:
+                            p["value"][lang] = val_i18n.get(lang, "")
+                    elif attr_type == "number":
+                        number = val_i18n.get(DEFAULT_LANGUAGE, "")
+                        for lang in TARGET_LANGUAGES:
+                            unit = data.get("munit_i18n", {}).get(lang, "")
+                            p["value"][lang] = f"{number} {unit}".strip()
+                    elif attr_type in ("select", "multi-select"):
+                        options = data.get("options", [])
+                        default_val = val_i18n.get(DEFAULT_LANGUAGE, "")
+                        for option in options:
+                            if option.get("value") == default_val:
+                                label_i18n = option.get("LabelI18n", {})
+                                for lang in TARGET_LANGUAGES:
+                                    p["value"][lang] = label_i18n.get(lang, "")
+                                break
+                    else:
+                        continue
+
+                    properties.append(p)
+        return properties
+
+def encode_document_product(p: dict) -> dict:
+    dp = DocumentProduct(p)
+    return dp.__dict__
+
 
 # task #2: Трансформация информации об каждом товаре в целевой формат и сохранить во временном локальном хранилище.
 def transform_data_callable(**context):
@@ -137,13 +282,34 @@ def transform_data_callable(**context):
     with open(file_path, "r", encoding="utf-8") as f:
         collected_products = json.load(f)
 
+    TRANSFORM_DATA_FILE_PATH = f"/tmp/{DAG_ID}.transform_data.json"
+    
     logging.info(f"Products count: {len(collected_products)}")
 
-    # Transform data
+    # Transform data in parallel
+    # with ThreadPoolExecutor(max_workers=8) as executor:
+        # transformed_products = list(executor.map(encode_document_product, collected_products))
 
+    transformed_products = []
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(encode_document_product, p) for p in collected_products]
+        for future in as_completed(futures):
+            try:
+                transformed_products.append(future.result())
+            except Exception as e:
+                logging.error(f"Failed to process product: {e}")
 
-    # Save data to temporary storage
+    # Save collected products data.
+    try:
+        with open(TRANSFORM_DATA_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(transformed_products, f, ensure_ascii=False)
+    except IOError as e:
+        raise Exception(f"Task failed: couldn't save file to {TRANSFORM_DATA_FILE_PATH}") from e
+    
+    logging.info("Transformed data saved to file succesfully")
+    context["ti"].xcom_push(key="transform_data_file_path", value=TRANSFORM_DATA_FILE_PATH)
 
+#####################################################################################################################
 
 # task #3: Сохранить информацию о товарах в Elasticsearch.
 # def load_data_callable(file_path: str):

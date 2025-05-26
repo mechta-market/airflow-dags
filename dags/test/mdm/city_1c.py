@@ -13,7 +13,7 @@ def fetch_data_callable(**context):
     """Получаем данные из 1c и сохраняем в XCom."""
     url = f"http://1c.mechta.market/getbaseinfo/{DICTIONARY_NAME}"
 
-    resp = requests.get(url, timeout=30)
+    resp = requests.post(url, timeout=30)
     resp.raise_for_status()
     payload = resp.json()
     results = payload.get("results", [])

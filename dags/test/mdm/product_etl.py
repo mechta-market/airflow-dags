@@ -334,7 +334,7 @@ def load_data_callable(**context):
     es_hook = ElasticsearchPythonHook(
         hosts=hosts,
     )
-    client = es_hook.get_conn()
+    client = es_hook.get_conn
 
     actions = [
         {

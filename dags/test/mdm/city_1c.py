@@ -15,7 +15,7 @@ INDEX_NAME = f"{DICTIONARY_NAME}_1c"
 
 def Request_to_1C() -> Any:
     host = Variable.get("1c_gw_host")
-    url = f"http://{host}/getbaseinfo/{DICTIONARY_NAME}"
+    url = f"{host}/getbaseinfo/{DICTIONARY_NAME}"
 
     resp = requests.post(url, timeout=30)
     resp.raise_for_status()

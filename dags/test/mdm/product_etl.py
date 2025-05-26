@@ -9,7 +9,6 @@ from threading import Lock
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.models import Variable
 from airflow.utils.trigger_rule import TriggerRule
 
 default_args = {
@@ -131,11 +130,15 @@ def extract_data_callable(**context):
 
 # task #2: Трансформация информации об каждом товаре в целевой формат и сохранить во временном локальном хранилище.
 def transform_data_callable(**context):
+    file_path = context["ti"].xcom_pull(
+        key="extract_data_file_path", task_ids="extract_data_task"
+    )
+
     # Load extracted data
-    with open(EXTRACT_DATA_FILE_PATH, "r", encoding="utf-8") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         items = json.load(f)
 
-    print(len(items))
+    logging.info(f"Products count: {len(items)}")
 
     # Transform data
 

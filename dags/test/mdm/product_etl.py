@@ -334,14 +334,14 @@ def load_data_callable(**context):
     es_hook = ElasticsearchPythonHook(
         hosts=hosts,
     )
-    client = es_hook.get_conn
+    client = es_hook.get_conn()
 
     actions = [
         {
             "_op_type": "update",
             "_index": INDEX_NAME,
-            "_id": transformed_products.get("id"),
-            "doc": transformed_products,
+            "_id": product.get("id"),
+            "doc": product,
             "doc_as_upsert": True,
         }
         for product in transformed_products

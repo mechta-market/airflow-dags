@@ -41,7 +41,7 @@ def fetch_with_retry(url: str, params=None, retries=MAX_RETRIES):
 # task #1: Get raw product data from NSI service and store in temporary storage.
 def extract_data_callable(**context):
     BASE_URL = "http://nsi.default"
-    MAX_WORKERS = 3
+    MAX_WORKERS = 5
 
     EXTRACT_DATA_FILE_PATH = f"/tmp/{DAG_ID}.extract_data.json"
 
@@ -58,7 +58,7 @@ def extract_data_callable(**context):
     initial_response.raise_for_status()
     initial_payload = initial_response.json()
     total_count = int(initial_payload.get("pagination_info", {}).get("total_count", 0))
-    total_pages = (total_count + page_size - 1)
+    total_pages = (total_count + page_size - 1) // page_size 
 
     def fetch_page(page: int):
         try:

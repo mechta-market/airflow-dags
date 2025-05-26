@@ -20,7 +20,8 @@ def Request_to_1C() -> Any:
     resp = requests.post(url, timeout=30)
     resp.raise_for_status()
     payload = resp.json()
-    results = payload.get("results", [])
+    results = payload.get("data", [])
+    print(results)
     return results
 
 

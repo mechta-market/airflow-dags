@@ -14,7 +14,7 @@ def fetch_data_callable(**context):
     """Получаем данные из NSI и сохраняем в XCom."""
     url = f"http://nsi.default/{DICTIONARY_NAME}"
 
-    resp = requests.get(url, timeout=30)
+    resp = requests.post(url, timeout=30)
     resp.raise_for_status()
     payload = resp.json()
     results = payload.get("results", [])

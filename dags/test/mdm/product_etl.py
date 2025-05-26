@@ -22,9 +22,9 @@ logging.basicConfig(level=logging.INFO)
 
 DAG_ID="product_etl"
 
-MAX_RETRIES = 3
-RETRY_DELAY = 1
-REQUEST_TIMEOUT = 60
+MAX_RETRIES=3
+RETRY_DELAY=1
+REQUEST_TIMEOUT=60
 
 def fetch_with_retry(url: str, params=None, retries=MAX_RETRIES):
     for attempt in range(retries):
@@ -283,7 +283,7 @@ def transform_data_callable(**context):
 
     TRANSFORM_DATA_FILE_PATH = f"/tmp/{DAG_ID}.transform_data.json"
     
-    logging.info(f"Products count: {len(collected_products)}")
+    # logging.info(f"Products count: {len(collected_products)}")
 
     # Transform data in parallel
     # with ThreadPoolExecutor(max_workers=8) as executor:
@@ -312,9 +312,19 @@ def transform_data_callable(**context):
 
 # task #3: Сохранить информацию о товарах в Elasticsearch.
 def load_data_callable(**context):
-    # INDEX_NAME = Variable.get(f"{DAG_ID}.elastic_index", default_var="product_v1")
+    file_path = context["ti"].xcom_pull(
+        key="transform_data_file_path", task_ids="transform_data_task"
+    )
 
-    pass
+    # Load extracted data
+    with open(file_path, "r", encoding="utf-8") as f:
+        transformed_products = json.load(f)
+    
+
+    logging.info(f"Products count: {len(transformed_products)}")
+    print(transformed_products[0])
+
+    # INDEX_NAME = Variable.get(f"{DAG_ID}.elastic_index", default_var="product_v1")
 
 
 def clean_tmp_file(file_path: str):

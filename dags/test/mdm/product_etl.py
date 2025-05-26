@@ -15,17 +15,13 @@ from airflow.utils.trigger_rule import TriggerRule
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    # "retries": 1,
+    # "retry_delay": timedelta(minutes=5),
 }
 
 logging.basicConfig(level=logging.INFO)
 
 DAG_ID="product_etl"
-
-EXTRACT_DATA_FILE_PATH = f"/tmp/{DAG_ID}.extract_data.json"
-INDEX_NAME = Variable.get(f"{DAG_ID}.elastic_index", default_var="product_v1")
-
 
 MAX_RETRIES = 3
 RETRY_DELAY = 1
@@ -48,6 +44,8 @@ def extract_data_callable(**context):
     BASE_URL = "http://nsi.default"
     MAX_WORKERS = 3
 
+    EXTRACT_DATA_FILE_PATH = f"/tmp/{DAG_ID}.extract_data.json"
+
     # Fetch required product_ids
 
     nsi_product_ids = []
@@ -61,7 +59,7 @@ def extract_data_callable(**context):
     initial_response.raise_for_status()
     initial_payload = initial_response.json()
     total_count = int(initial_payload.get("pagination_info", {}).get("total_count", 0))
-    total_pages = (total_count + page_size - 1) // page_size
+    total_pages = (total_count + page_size - 1)
 
     def fetch_page(page: int):
         try:
@@ -110,7 +108,7 @@ def extract_data_callable(**context):
             logging.error(f"fetch_product_details.fetch_with_retry: id: {id}, error: {e}")
             return None
 
-    with ThreadPoolExecutor(...) as executor:
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(fetch_product_details, pid) for pid in nsi_product_ids]
 
         for future in as_completed(futures):
@@ -146,6 +144,8 @@ def transform_data_callable(**context):
 
 # task #3: Сохранить информацию о товарах в Elasticsearch.
 # def load_data_callable(file_path: str):
+#     INDEX_NAME = Variable.get(f"{DAG_ID}.elastic_index", default_var="product_v1")
+#
 #     pass
 
 

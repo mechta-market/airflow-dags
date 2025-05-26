@@ -8,9 +8,9 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 
-DICTIONARY_NAME = "city"
+DICTIONARY_NAME = "subdivision"
 INDEX_NAME = f"{DICTIONARY_NAME}_1c"
-NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
+NORMALIZE_FIELDS = ["node_id", "city_id"]
 
 
 def fetch_data_callable(**context) -> None:

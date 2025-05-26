@@ -8,9 +8,9 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 
-DICTIONARY_NAME = "city"
+DICTIONARY_NAME = "node"
 INDEX_NAME = f"{DICTIONARY_NAME}_1c"
-NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
+NORMALIZE_FIELDS = ["parent_id"]
 
 
 def fetch_data_callable(**context) -> None:
@@ -35,7 +35,17 @@ def normalize_data_callable(**context) -> None:
     for item in items:
         if item.get("id") == ZERO_UUID:
             continue
-        normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
+        # Нормализуем поля
+        normalized_item = normalize_zero_uuid_fields(item, NORMALIZE_FIELDS)
+
+        # Очистка и фильтрация hosts, если это список
+        if "hosts" in normalized_item and isinstance(normalized_item["hosts"], list):
+            filtered_hosts = [
+                host.strip() for host in normalized_item["hosts"] if host.strip()
+            ]
+            normalized_item["hosts"] = filtered_hosts
+
+        normalized.append(normalized_item)
 
     context["ti"].xcom_push(key="normalized_data", value=normalized)
 

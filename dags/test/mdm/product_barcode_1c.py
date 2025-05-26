@@ -8,9 +8,9 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 
-DICTIONARY_NAME = "city"
+DICTIONARY_NAME = "product_barcode"
 INDEX_NAME = f"{DICTIONARY_NAME}_1c"
-NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
+NORMALIZE_FIELDS = []
 
 
 def fetch_data_callable(**context) -> None:
@@ -33,8 +33,9 @@ def normalize_data_callable(**context) -> None:
 
     normalized = []
     for item in items:
-        if item.get("id") == ZERO_UUID:
+        if item.get("product_id") == ZERO_UUID or not item.get("value"):
             continue
+
         normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
 
     context["ti"].xcom_push(key="normalized_data", value=normalized)

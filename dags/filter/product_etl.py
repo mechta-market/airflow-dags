@@ -1,36 +1,44 @@
-import requests
 import json
-import time
-import os
 import logging
-from typing import List, Dict, Any
-from datetime import datetime, timedelta
+import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
 
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.utils.trigger_rule import TriggerRule
-from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
-
+import requests
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
+from airflow.utils.trigger_rule import TriggerRule
+
+# DAG parameters
+DAG_ID="product_etl"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    # "retries": 1,
-    # "retry_delay": timedelta(minutes=5),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=5),
 }
 
-logging.basicConfig(level=logging.INFO)
-
-DAG_ID="product_etl"
-
-MAX_RETRIES=3
-RETRY_DELAY=1
+# Constants
+REQUEST_MAX_RETRIES=3
+REQUEST_RETRY_DELAY=1
 REQUEST_TIMEOUT=60
 
-def fetch_with_retry(url: str, params=None, retries=MAX_RETRIES):
+INDEX_NAME = "product_v1"
+
+DEFAULT_LANGUAGE = "ru"
+TARGET_LANGUAGES = ["ru", "kz"]
+
+# Configurations
+logging.basicConfig(level=logging.INFO)
+
+# Functions
+def fetch_with_retry(url: str, params=None, retries=REQUEST_MAX_RETRIES):
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
@@ -38,103 +46,20 @@ def fetch_with_retry(url: str, params=None, retries=MAX_RETRIES):
             return response.json()
         except requests.RequestException:
             if attempt < retries - 1:
-                time.sleep(RETRY_DELAY * (attempt + 1))
+                time.sleep(REQUEST_RETRY_DELAY * (attempt + 1))
             else:
                 raise
 
-# task #1: Get raw product data from NSI service and store in temporary storage.
-def extract_data_callable(**context):
-    BASE_URL = "http://nsi.default"
-    MAX_WORKERS = 7
+def clean_tmp_file(file_path: str):
+    if file_path == "":
+        return
 
-    EXTRACT_DATA_FILE_PATH = f"/tmp/{DAG_ID}.extract_data.json"
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        logging.info(f"Temporary file removed: {file_path}")
+    else:
+        logging.info(f"File does not exist: {file_path}")
 
-    # Fetch required product_ids
-
-    nsi_product_ids = []
-    page_size = 1000
-
-    initial_response = requests.get(
-        f"{BASE_URL}/product",
-        params={"list_params.only_count": True},
-        timeout=10,
-    )
-    initial_response.raise_for_status()
-    initial_payload = initial_response.json()
-    total_count = int(initial_payload.get("pagination_info", {}).get("total_count", 0))
-    total_pages = (total_count + page_size - 1) // page_size 
-
-    def fetch_page(page: int):
-        try:
-            data = fetch_with_retry(
-                f"{BASE_URL}/product",
-                params={
-                    "list_params.page": page,
-                    "list_params.page_size": page_size,
-                    "archived": False,
-                },
-            )
-            return [item["id"] for item in data.get("results", []) if "id" in item]
-        except Exception as e:
-            logging.error(f"Ошибка при получении страницы {page}: {e}")
-            return []
-
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_page = {
-            executor.submit(fetch_page, page): page for page in range(total_pages)
-        }
-
-        for future in as_completed(future_to_page):
-            page = future_to_page[future]
-            try:
-                ids = future.result()
-                nsi_product_ids.extend(ids)
-            except Exception as exc:
-                logging.error(f"Error in processing page {page}: {exc}")
-
-    # Fetch product details data.
-
-    collected_products = []
-
-    def fetch_product_details(id: str):
-        url = f"{BASE_URL}/product/{id}"
-        params = {
-            "with_properties": True,
-            "with_breadcrumbs": True,
-            "with_image_urls": True,
-            "with_pre_order": True,
-        }
-
-        try:
-            return fetch_with_retry(url, params=params)
-        except Exception as e:
-            logging.error(f"fetch_product_details.fetch_with_retry: id: {id}, error: {e}")
-            return None
-
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(fetch_product_details, pid) for pid in nsi_product_ids]
-
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                collected_products.append(result)
-
-    logging.info(f"Products are extracted: {len(collected_products)}")
-
-    # Save collected products data.
-    try:
-        with open(EXTRACT_DATA_FILE_PATH, "w", encoding="utf-8") as f:
-            json.dump(collected_products, f, ensure_ascii=False)
-    except IOError as e:
-        raise Exception(f"Task failed: couldn't save file to {EXTRACT_DATA_FILE_PATH}") from e
-    
-    logging.info("Extracted data saved to file succesfully")
-    context["ti"].xcom_push(key="extract_data_file_path", value=EXTRACT_DATA_FILE_PATH)
-
-################################################################################
-
-DEFAULT_LANGUAGE = "ru"
-TARGET_LANGUAGES = ["ru", "kz"]
 
 class DocumentProduct:
     def __init__(self, p: dict):
@@ -200,7 +125,7 @@ class DocumentProduct:
         for group in groups:
             flags = group.get("flags", {})
             if flags.get("hidden", False):
-                continue  # Пропускаем скрытые группы
+                continue
 
             attributes = group.get("attributes", [])
             for attr in attributes:
@@ -274,26 +199,109 @@ def encode_document_product(p: dict) -> dict:
     dp = DocumentProduct(p)
     return dp.__dict__
 
+
+# task #1: Get raw product data from NSI service and store data in temporary storage.
+def extract_data_callable(**context):
+    BASE_URL = "http://nsi.default"
+    MAX_WORKERS = 7
+    EXTRACT_DATA_FILE_PATH = f"/tmp/{DAG_ID}.extract_data.json"
+
+    # Get product_ids from nsi
+
+    nsi_product_ids = []
+    page_size = 1000
+
+    initial_response = requests.get(
+        f"{BASE_URL}/product",
+        params={"list_params.only_count": True},
+        timeout=REQUEST_TIMEOUT,
+    )
+    initial_response.raise_for_status()
+    initial_payload = initial_response.json()
+    total_count = int(initial_payload.get("pagination_info", {}).get("total_count", 0))
+    total_pages = (total_count + page_size - 1) // page_size 
+
+    def fetch_page(page: int):
+        try:
+            data = fetch_with_retry(
+                f"{BASE_URL}/product",
+                params={
+                    "list_params.page": page,
+                    "list_params.page_size": page_size,
+                    "archived": False,
+                },
+            )
+            return [item["id"] for item in data.get("results", []) if "id" in item]
+        except Exception as e:
+            logging.error(f"Ошибка при получении страницы {page}: {e}")
+            return []
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_to_page = {
+            executor.submit(fetch_page, page): page for page in range(total_pages)
+        }
+
+        for future in as_completed(future_to_page):
+            page = future_to_page[future]
+            try:
+                ids = future.result()
+                nsi_product_ids.extend(ids)
+            except Exception as exc:
+                logging.error(f"Error in processing page {page}: {exc}")
+
+    # Get product details from nsi
+
+    collected_products = []
+
+    def fetch_product_details(id: str):
+        url = f"{BASE_URL}/product/{id}"
+        params = {
+            "with_properties": True,
+            "with_breadcrumbs": True,
+            "with_image_urls": True,
+            "with_pre_order": True,
+        }
+
+        try:
+            return fetch_with_retry(url, params=params)
+        except Exception as e:
+            logging.error(f"fetch_product_details.fetch_with_retry: id: {id}, error: {e}")
+            return None
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(fetch_product_details, pid) for pid in nsi_product_ids]
+
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                collected_products.append(result)
+
+    # Save products data
+
+    try:
+        with open(EXTRACT_DATA_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(collected_products, f, ensure_ascii=False)
+    except IOError as e:
+        raise Exception(f"Task failed: couldn't save file to {EXTRACT_DATA_FILE_PATH}") from e
+    
+    logging.info(f"Products are extracted: {len(collected_products)}")
+    context["ti"].xcom_push(key="extract_data_file_path", value=EXTRACT_DATA_FILE_PATH)
+
+
 # task #2: Transform product data to a target format and store in temporary store.
 def transform_data_callable(**context):
+    MAX_WORKERS = 7
+    TRANSFORM_DATA_FILE_PATH = f"/tmp/{DAG_ID}.transform_data.json"
+
     file_path = context["ti"].xcom_pull(
         key="extract_data_file_path", task_ids="extract_data_task"
     )
 
-    # Load extracted data
     with open(file_path, "r", encoding="utf-8") as f:
         collected_products = json.load(f)
 
-    TRANSFORM_DATA_FILE_PATH = f"/tmp/{DAG_ID}.transform_data.json"
-    
-    # logging.info(f"Products count: {len(collected_products)}")
-
-    # Transform data in parallel
-    # with ThreadPoolExecutor(max_workers=8) as executor:
-        # transformed_products = list(executor.map(encode_document_product, collected_products))
-
     transformed_products = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(encode_document_product, p) for p in collected_products]
         for future in as_completed(futures):
             try:
@@ -301,28 +309,23 @@ def transform_data_callable(**context):
             except Exception as e:
                 logging.error(f"Failed to process product: {e}")
 
-    # Save collected products data.
     try:
         with open(TRANSFORM_DATA_FILE_PATH, "w", encoding="utf-8") as f:
             json.dump(transformed_products, f, ensure_ascii=False)
     except IOError as e:
         raise Exception(f"Task failed: couldn't save file to {TRANSFORM_DATA_FILE_PATH}") from e
     
-    logging.info("Transformed data saved to file succesfully")
+    logging.info(f"Products data are saved: {len(transformed_products)}")
     context["ti"].xcom_push(key="transform_data_file_path", value=TRANSFORM_DATA_FILE_PATH)
 
-##################################################################################
 
-INDEX_NAME = "product_v1"
-
-# task #3: Delete products from Elasticsearch index that are not in the transformed data.
+# task #3: Delete products in Elasticsearch that are not present in the transformed data.
 def delete_different_data_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="transform_data_file_path", task_ids="transform_data_task"
     )
 
     if not file_path or not os.path.exists(file_path):
-        # logging.error(f"File not found: {file_path}")
         raise FileNotFoundError(f"File not found: {file_path}")
 
     with open(file_path, "r", encoding="utf-8") as f:
@@ -355,11 +358,9 @@ def delete_different_data_callable(**context):
         logging.error(f"Failed to fetch existing IDs from Elasticsearch: {e}")
         return
 
-    # Determine IDs to delete
     incoming_ids = {product.get("id") for product in transformed_products if product.get("id")}
     ids_to_delete = existing_ids - incoming_ids
 
-    # Delete products by IDs
     delete_actions = [
         {
             "_op_type": "delete",
@@ -379,8 +380,9 @@ def delete_different_data_callable(**context):
                 logging.error(f"Errors encountered during bulk delete: {errors}")
         except BulkIndexError as bulk_error:
             raise Exception(f"Bulk delete failed: {bulk_error}")
+    
+    logging.info(f"Products are deleted: {len(ids_to_delete)}")
 
-##################################################################################
 
 # task #4: Upload transformed product data to Elasticsearch.
 def load_data_callable(**context):
@@ -389,7 +391,6 @@ def load_data_callable(**context):
     )
 
     if not file_path or not os.path.exists(file_path):
-        # logging.error(f"File not found: {file_path}")
         raise FileNotFoundError(f"File not found: {file_path}")
 
     with open(file_path, "r", encoding="utf-8") as f:
@@ -423,19 +424,8 @@ def load_data_callable(**context):
     except BulkIndexError as bulk_error:
         raise Exception(f"Bulk update failed: {bulk_error}") 
 
-#############################################################################
 
-def clean_tmp_file(file_path: str):
-    if file_path == "":
-        return
-
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        logging.info(f"Temporary file removed: {file_path}")
-    else:
-        logging.info(f"File does not exist: {file_path}")
-
-# task #5: Удалить временные данные.
+# task #5: Delete temporary data.
 def cleanup_temp_files_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="extract_data_file_path", task_ids="extract_data_task"
@@ -447,12 +437,12 @@ def cleanup_temp_files_callable(**context):
     )
     clean_tmp_file(file_path)
 
-#############################################################################
 
+# DAG initialization.
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    description='DAG to upload product info from NSI service to Elasticsearch index',
+    description='DAG to upload products data from NSI service to Elasticsearch index',
     start_date=datetime(2025, 5, 22),
     schedule="*/60 * * * *",
     catchup=False,
@@ -471,8 +461,8 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    delete_data = PythonOperator(
-        task_id="delete_data_task",
+    delete_different_data = PythonOperator(
+        task_id="delete_different_data_task",
         python_callable=delete_different_data_callable,
         provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
@@ -492,4 +482,4 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    extract_data >> transform_data >> delete_data >> load_data >> cleanup_temp_files
+    extract_data >> transform_data >> delete_different_data >> load_data >> cleanup_temp_files

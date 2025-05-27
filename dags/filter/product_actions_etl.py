@@ -15,7 +15,7 @@ DATA_FILE_PATH = "/tmp/product_action_site.json"
 
 
 def fetch_data_callable(**context):
-    url = f"{Variable.get("site_api_host")}/v2/airflow/product/sort"
+    url = f"{Variable.get("site_api_host")}/v2/airflow/product/action"
     page_size = 100
 
     def fetch_page(page: int) -> list:

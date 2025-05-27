@@ -9,11 +9,6 @@ from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPyt
 DICTIONARY_NAME = "property_model"
 INDEX_NAME = f"{DICTIONARY_NAME}_nsi"
 
-
-
-
-
-
 def fetch_data_callable(**context):
     """Получаем данные из NSI и сохраняем в XCom."""
     url = f"http://nsi.default/{DICTIONARY_NAME}"

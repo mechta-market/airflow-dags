@@ -98,7 +98,6 @@ def upsert_city_ids_in_warehouse_callable(**context):
             logging.info(f"WID: {warehouse_id}, CITY_ID: {city_id}")
             warehouse_city_ids.setdefault(warehouse_id, set()).add(city_id)
 
-    actions = []
     for warehouse_id, city_ids in warehouse_city_ids.items():
         if not warehouse_id or not city_ids:
             logging.info(
@@ -107,27 +106,12 @@ def upsert_city_ids_in_warehouse_callable(**context):
             continue
 
         logging.info(f"WID: {warehouse_id}, CITY_IDS: {city_ids}")
-        actions.append(
-            {
-                "_op_type": "update",
-                "_index": ADDITIONAL_INDEX_NAME,
-                "_id": warehouse_id,
-                "doc": {"city_ids": list(city_ids)},
-                "doc_as_upsert": True,  # optional: creates if not exists
-            }
-        )
-    logging.info(f"ACTIONS: {actions}")
 
-    if actions:
-        try:
-            success, errors = helpers.bulk(
-                client, actions, refresh="wait_for", stats_only=False
-            )
-            logging.info(f"Successfully updated {success} documents.")
-            if errors:
-                logging.error(f"Errors encountered: {errors}")
-        except BulkIndexError as bulk_error:
-            logging.error(f"Bulk update failed: {bulk_error}")
+        client.update(
+            index=ADDITIONAL_INDEX_NAME,
+            id=warehouse_id,
+            body={"doc": {"city_ids": list(city_ids)}, "doc_as_upsert": True},
+        )
 
 
 default_args = {

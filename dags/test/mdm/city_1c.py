@@ -143,4 +143,10 @@ with DAG(
         provide_context=True,
     )
 
-    fetch_data >> normalize_data >> upsert_to_es
+    upsert_city_ids_in_warehouse = PythonOperator(
+        task_id="upsert_city_ids_in_warehouse_task",
+        python_callable=upsert_city_ids_in_warehouse_callable,
+        provide_context=True,
+    )
+
+    fetch_data >> normalize_data >> [upsert_to_es, upsert_city_ids_in_warehouse]

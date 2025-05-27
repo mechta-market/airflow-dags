@@ -7,9 +7,12 @@ from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
 
 DICTIONARY_NAME = "city"
 INDEX_NAME = f"{DICTIONARY_NAME}_1c"
+ADDITIONAL_INDEX_NAME = "warehouse_1c"
 NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
 
 
@@ -63,6 +66,47 @@ def upsert_to_es_callable(**context):
             id=doc_id,
             body={"doc": item, "doc_as_upsert": True},
         )
+
+
+def upsert_city_ids_in_warehouse_callable(**context):
+    """Загружаем данные в Elasticsearch."""
+    items = context["ti"].xcom_pull(
+        key="normalized_data", task_ids="normalize_data_task"
+    )
+    if not items:
+        return
+
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
+
+    warehouse_city_ids = {}
+    for item in items:
+        for warehouse_id in item.get("warehouse_ids"):
+            warehouse_city_ids.setdefault(warehouse_id, []).append(item.get("city_id"))
+
+    actions = [
+        {
+            "_op_type": "update",
+            "_index": ADDITIONAL_INDEX_NAME,
+            "_id": warehouse_id,
+            "doc": {"city_ids": city_ids},
+            "doc_as_upsert": True,
+        }
+        for warehouse_id, city_ids in warehouse_city_ids.items()
+    ]
+
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
+        )
+        print(f"Successfully updated {success} documents.")
+        if errors:
+            print(f"Errors encountered: {errors}")
+    except BulkIndexError as bulk_error:
+        print(f"Bulk update failed: {bulk_error}")
 
 
 default_args = {

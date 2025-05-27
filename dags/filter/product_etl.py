@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.models import Variable
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
@@ -314,22 +313,88 @@ def transform_data_callable(**context):
 
 ##################################################################################
 
-# task #3: Upload transformed product data to Elasticsearch.
+INDEX_NAME = "product_v1"
+
+# task #3: Delete products from Elasticsearch index that are not in the transformed data.
+def delete_different_data_callable(**context):
+    file_path = context["ti"].xcom_pull(
+        key="transform_data_file_path", task_ids="transform_data_task"
+    )
+
+    if not file_path or not os.path.exists(file_path):
+        # logging.error(f"File not found: {file_path}")
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        transformed_products = json.load(f)
+    
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
+
+    existing_ids_query = {
+        "query": {
+            "match_all": {}
+        },
+        "_source": False,
+        "fields": ["_id"]
+    }
+
+    try:
+        response = client.search(index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m")
+        scroll_id = response["_scroll_id"]
+        existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
+
+        while len(response["hits"]["hits"]) > 0:
+            response = client.scroll(scroll_id=scroll_id, scroll="2m")
+            existing_ids.update(hit["_id"] for hit in response["hits"]["hits"])
+
+    except Exception as e:
+        logging.error(f"Failed to fetch existing IDs from Elasticsearch: {e}")
+        return
+
+    # Determine IDs to delete
+    incoming_ids = {product.get("id") for product in transformed_products if product.get("id")}
+    ids_to_delete = existing_ids - incoming_ids
+
+    # Delete products by IDs
+    delete_actions = [
+        {
+            "_op_type": "delete",
+            "_index": INDEX_NAME,
+            "_id": product_id,
+        }
+        for product_id in ids_to_delete
+    ]
+
+    if delete_actions:
+        try:
+            success, errors = helpers.bulk(
+                client, delete_actions, refresh="wait_for", stats_only=False
+            )
+            logging.info(f"Successfully deleted {success} documents.")
+            if errors:
+                logging.error(f"Errors encountered during bulk delete: {errors}")
+        except BulkIndexError as bulk_error:
+            raise Exception(f"Bulk delete failed: {bulk_error}")
+
+##################################################################################
+
+# task #4: Upload transformed product data to Elasticsearch.
 def load_data_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="transform_data_file_path", task_ids="transform_data_task"
     )
 
     if not file_path or not os.path.exists(file_path):
-        logging.error(f"File not found: {file_path}")
-        return
+        # logging.error(f"File not found: {file_path}")
+        raise FileNotFoundError(f"File not found: {file_path}")
 
     with open(file_path, "r", encoding="utf-8") as f:
         transformed_products = json.load(f)
     
-    # INDEX_NAME = Variable.get(f"{DAG_ID}.elastic_index", default_var="product_v1")
-    INDEX_NAME = "product_v1"
-
     hosts = ["http://mdm.default:9200"]
     es_hook = ElasticsearchPythonHook(
         hosts=hosts,
@@ -370,7 +435,7 @@ def clean_tmp_file(file_path: str):
     else:
         logging.info(f"File does not exist: {file_path}")
 
-# task #4: Удалить временные данные.
+# task #5: Удалить временные данные.
 def cleanup_temp_files_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="extract_data_file_path", task_ids="extract_data_task"
@@ -406,6 +471,13 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
+    delete_data = PythonOperator(
+        task_id="delete_data_task",
+        python_callable=delete_different_data_callable,
+        provide_context=True,
+        trigger_rule=TriggerRule.ALL_SUCCESS,
+    )
+
     load_data = PythonOperator(
         task_id="load_data_task",
         python_callable=load_data_callable,
@@ -420,4 +492,4 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    extract_data >> transform_data >> load_data >> cleanup_temp_files
+    extract_data >> transform_data >> delete_data >> load_data >> cleanup_temp_files

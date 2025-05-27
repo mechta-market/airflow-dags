@@ -40,6 +40,7 @@ def fetch_data_callable(**context):
     total_count = int(initial_payload.get("meta", {}).get("total", 0))
     # total_pages = int(initial_payload.get("meta", {}).get("last_page", 0))
     total_pages = (total_count + page_size - 1) // page_size
+    logging.info(f"initial_response data: len={len(initial_response.get("products"))}, meta= {initial_response.get("meta")}")
 
     all_results = []
 

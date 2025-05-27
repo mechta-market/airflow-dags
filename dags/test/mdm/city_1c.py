@@ -86,7 +86,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
 
     warehouse_city_ids = {}
     for item in items:
-        for warehouse_id in item.get("warehouse_ids", []):
+        for warehouse_id in item.get("warehouse_ids"):
             if not warehouse_id:
                 continue
             city_id = item.get("city_id")

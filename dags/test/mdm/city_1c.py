@@ -90,9 +90,9 @@ def upsert_city_ids_in_warehouse_callable(**context):
             city_id = item.get("city_id")
             if not city_id:
                 continue
-            print(f"WID: {warehouse_id}, CITY_ID: {city_id}")
+            logging.info(f"WID: {warehouse_id}, CITY_ID: {city_id}")
             warehouse_city_ids.setdefault(warehouse_id, set()).add(city_id)
-    print(warehouse_city_ids)
+    logging.info(warehouse_city_ids)
     actions = [
         {
             "_op_type": "update",
@@ -109,7 +109,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        print(f"Successfully updated {success} documents.")
+        logging.info(f"Successfully updated {success} documents.")
         if errors:
             print(f"Errors encountered: {errors}")
     except BulkIndexError as bulk_error:

@@ -16,3 +16,12 @@ def normalize_zero_uuid_fields(item: dict, fields: list[str]) -> dict:
         if item.get(field) == ZERO_UUID:
             item[field] = ""
     return item
+
+
+def request_to_site_api(host: str, endpoint: str) -> dict:
+    """Отправляет запрос к API сайта и возвращает ответ в виде словаря."""
+    url = f"{host}/{endpoint}"
+
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()

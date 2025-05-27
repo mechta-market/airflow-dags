@@ -10,6 +10,10 @@ from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
+
+
 INDEX_NAME = "product_v1"
 DATA_FILE_PATH = "/tmp/product_action_site.json"
 
@@ -80,15 +84,28 @@ def upsert_to_es_callable(**context):
     hosts = ["http://mdm.default:9200"]
     es_hook = ElasticsearchPythonHook(hosts=hosts)
     client = es_hook.get_conn
-    for item in items:
-        doc_id = item.get("id")
-        if not doc_id:
-            continue
-        client.update(
-            index=INDEX_NAME,
-            id=doc_id,
-            body={"doc": {"actions": item.get("actions")}, "doc_as_upsert": True},
+    
+    actions = [
+        {
+            "_op_type": "update",
+            "_index": INDEX_NAME,
+            "_id": item.get("id"),
+            "doc": item,
+            "doc_as_upsert": True,
+        }
+        for item in items
+        if item.get("id")
+    ]
+
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
         )
+        logging.info(f"Successfully updated {success} documents.")
+        if errors:
+            logging.error(f"Errors encountered: {errors}")
+    except BulkIndexError as bulk_error:
+        logging.error(f"Bulk update failed: {bulk_error}")
 
 
 default_args = {

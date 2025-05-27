@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from datetime import datetime
 from helpers.utils import request_to_site_api
 
@@ -7,6 +8,9 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
+
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
 
 INDEX_NAME = "product_v1"
 DATA_FILE_PATH = "/tmp/product_sort_site.json"
@@ -17,9 +21,9 @@ def fetch_data_callable(**context):
         host=Variable.get("site_api_host"), endpoint="v2/airflow/product/sort"
     )
     with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(response, f, ensure_ascii=False)
+        json.dump(response.get("products"), f, ensure_ascii=False)
 
-    print(f"Data saved to {DATA_FILE_PATH}")
+    logging.info(f"Data saved to {DATA_FILE_PATH}")
     context["ti"].xcom_push(key="data_file_path", value=DATA_FILE_PATH)
 
 
@@ -29,7 +33,7 @@ def upsert_to_es_callable(**context):
     )
 
     if not file_path or not os.path.exists(file_path):
-        print("Data file not found.")
+        logging.info("Data file not found.")
         return
 
     with open(file_path, "r", encoding="utf-8") as f:
@@ -41,15 +45,27 @@ def upsert_to_es_callable(**context):
     hosts = ["http://mdm.default:9200"]
     es_hook = ElasticsearchPythonHook(hosts=hosts)
     client = es_hook.get_conn
-    for item in items:
-        doc_id = item.get("id")
-        if not doc_id:
-            continue
-        client.update(
-            index=INDEX_NAME,
-            id=doc_id,
-            body={"doc": {"sort": item.get("sort")}, "doc_as_upsert": True},
+    actions = [
+        {
+            "_op_type": "update",
+            "_index": INDEX_NAME,
+            "_id": item.get("id"),
+            "doc": item,
+            "doc_as_upsert": True,
+        }
+        for item in items
+        if item.get("id")
+    ]
+
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
         )
+        logging.info(f"Successfully updated {success} documents.")
+        if errors:
+            logging.error(f"Errors encountered: {errors}")
+    except BulkIndexError as bulk_error:
+        logging.error(f"Bulk update failed: {bulk_error}")
 
 
 default_args = {

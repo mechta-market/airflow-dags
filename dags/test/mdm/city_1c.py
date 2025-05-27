@@ -97,27 +97,34 @@ def upsert_city_ids_in_warehouse_callable(**context):
                 continue
             logging.info(f"WID: {warehouse_id}, CITY_ID: {city_id}")
             warehouse_city_ids.setdefault(warehouse_id, set()).add(city_id)
-    logging.info(warehouse_city_ids)
-    actions = [
-        {
-            "_op_type": "update",
-            "_index": ADDITIONAL_INDEX_NAME,
-            "_id": warehouse_id,
-            "doc": {"city_ids": list(city_ids)},
-        }
-        for warehouse_id, city_ids in warehouse_city_ids.items()
-        if warehouse_id and city_ids
-    ]
 
-    try:
-        success, errors = helpers.bulk(
-            client, actions, refresh="wait_for", stats_only=False
+    actions = []
+    for warehouse_id, city_ids in warehouse_city_ids.items():
+        if not warehouse_id or not city_ids:
+            logging.info(
+                f"warehouse_id or city_ids is empty: wid: {warehouse_id}, cids: {city_id}"
+            )
+            continue
+
+        actions.append(
+            {
+                "_op_type": "update",
+                "_index": ADDITIONAL_INDEX_NAME,
+                "_id": warehouse_id,
+                "doc": {"city_ids": city_ids},
+                "doc_as_upsert": True,  # optional: creates if not exists
+            }
         )
-        logging.info(f"Successfully updated {success} documents.")
-        if errors:
-            print(f"Errors encountered: {errors}")
-    except BulkIndexError as bulk_error:
-        print(f"Bulk update failed: {bulk_error}")
+    if actions:
+        try:
+            success, errors = helpers.bulk(
+                client, actions, refresh="wait_for", stats_only=False
+            )
+            logging.info(f"Successfully updated {success} documents.")
+            if errors:
+                logging.error(f"Errors encountered: {errors}")
+        except BulkIndexError as bulk_error:
+            logging.error(f"Bulk update failed: {bulk_error}")
 
 
 default_args = {

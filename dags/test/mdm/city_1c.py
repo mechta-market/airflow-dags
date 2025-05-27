@@ -111,7 +111,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
                 "_op_type": "update",
                 "_index": ADDITIONAL_INDEX_NAME,
                 "_id": warehouse_id,
-                "doc": {"city_ids": city_ids},
+                "doc": {"city_ids": list(city_ids)},
                 "doc_as_upsert": True,  # optional: creates if not exists
             }
         )

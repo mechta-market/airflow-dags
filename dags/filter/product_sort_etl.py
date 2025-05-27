@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 from helpers.utils import request_to_site_api
 
@@ -11,12 +10,6 @@ INDEX_NAME = "product_v1"
 
 def fetch_data_callable(**context):
     response = request_to_site_api(host=Variable.get("site_api_host"), endpoint="v2/airflow/product/sort")
-    if not response.get("success", False):
-        logging.error(
-            f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"
-        )
-        return
-
     context["ti"].xcom_push(key="fetched_data", value=response.get("products"))
 
 def upsert_to_es_callable(**context):

@@ -1,6 +1,8 @@
+import logging
 import requests
 
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
+
 
 def request_to_1c(host: str, dic_name: str) -> dict:
     url = f"{host}/send/by_db_name/AstOffice/getbaseinfo/{dic_name}"
@@ -24,4 +26,7 @@ def request_to_site_api(host: str, endpoint: str) -> dict:
 
     response = requests.get(url)
     response.raise_for_status()
+    if not response.status_code < 300:
+        logging.error(f"ERROR_CODE: {response.status_code}")
+        return
     return response.json()

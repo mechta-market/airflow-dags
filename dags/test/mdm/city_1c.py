@@ -91,7 +91,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
             if not warehouse_id:
                 logging.info(f"warehouse_id is empty: {warehouse_id}")
                 continue
-            city_id = item.get("city_id")
+            city_id = item.get("id")
             if not city_id:
                 logging.info(f"city_id is empty: {city_id}")
                 continue

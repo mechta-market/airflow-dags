@@ -1,7 +1,9 @@
 import os
 import json
+import logging
+import requests
 from datetime import datetime
-from helpers.utils import request_to_site_api
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from airflow import DAG
 from airflow.models import Variable
@@ -13,13 +15,49 @@ DATA_FILE_PATH = "/tmp/product_action_site.json"
 
 
 def fetch_data_callable(**context):
-    response = request_to_site_api(
-        host=Variable.get("site_api_host"), endpoint="v2/airflow/product/action"
-    )
-    with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(response, f, ensure_ascii=False)
+    url = f"{Variable.get("site_api_host")}/v2/airflow/product/sort"
+    page_size = 100
 
-    print(f"Data saved to {DATA_FILE_PATH}")
+    def fetch_page(page: int) -> list:
+        resp = requests.get(
+            url,
+            params={
+                "page": page,
+                "per_page": page_size,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        return payload.get("products", [])
+
+    initial_response = requests.get(
+        url,
+        timeout=10,
+    )
+    initial_response.raise_for_status()
+    initial_payload = initial_response.json()
+    total_count = int(initial_payload.get("meta", {}).get("total", 0))
+    # total_pages = int(initial_payload.get("meta", {}).get("last_page", 0))
+    total_pages = (total_count + page_size - 1) // page_size
+
+    all_results = []
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(fetch_page, page): page for page in range(total_pages)
+        }
+        for future in as_completed(futures):
+            try:
+                all_results.extend(future.result())
+            except Exception as e:
+                logging.error(f"Error loading page {futures[future]}: {e}")
+
+    logging.info(f"Fetched data: len={len(all_results)}")
+    with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(all_results, f, ensure_ascii=False)
+
+    logging.info(f"Data saved to {DATA_FILE_PATH}")
     context["ti"].xcom_push(key="data_file_path", value=DATA_FILE_PATH)
 
 
@@ -29,7 +67,7 @@ def upsert_to_es_callable(**context):
     )
 
     if not file_path or not os.path.exists(file_path):
-        print("Data file not found.")
+        logging.info("Data file not found.")
         return
 
     with open(file_path, "r", encoding="utf-8") as f:

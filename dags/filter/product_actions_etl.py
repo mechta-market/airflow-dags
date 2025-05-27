@@ -1,9 +1,11 @@
 import logging
 from datetime import datetime
+from helpers.utils import request_to_site_api
+
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
-from helpers.utils import request_to_site_api
 
 INDEX_NAME = "product_v1"
 

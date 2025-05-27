@@ -90,6 +90,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
             city_id = item.get("city_id")
             if not city_id:
                 continue
+            print(f"WID: {warehouse_id}, CITY_ID: {city_id}")
             warehouse_city_ids.setdefault(warehouse_id, set()).add(city_id)
     print(warehouse_city_ids)
     actions = [

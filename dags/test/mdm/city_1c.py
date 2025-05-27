@@ -91,7 +91,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
             if not city_id:
                 continue
             warehouse_city_ids.setdefault(warehouse_id, set()).add(city_id)
-
+    print(warehouse_city_ids)
     actions = [
         {
             "_op_type": "update",

@@ -51,7 +51,6 @@ def upsert_to_es_callable(**context):
             "_index": INDEX_NAME,
             "_id": item.get("id"),
             "doc": item,
-            "doc_as_upsert": True,
         }
         for item in items
         if item.get("id")
@@ -76,7 +75,7 @@ default_args = {
 with DAG(
     dag_id=f"product_sort_etl",
     default_args=default_args,
-    schedule_interval="*/60 * * * *",
+    schedule_interval="0 0 * * *",
     start_date=datetime(2025, 5, 27),
     catchup=False,
     tags=["elasticsearch", "site"],

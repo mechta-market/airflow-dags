@@ -91,7 +91,6 @@ def upsert_to_es_callable(**context):
             "_index": INDEX_NAME,
             "_id": item.get("id"),
             "doc": item,
-            "doc_as_upsert": True,
         }
         for item in items
         if item.get("id")

@@ -84,18 +84,24 @@ def upsert_city_ids_in_warehouse_callable(**context):
 
     warehouse_city_ids = {}
     for item in items:
-        for warehouse_id in item.get("warehouse_ids"):
-            warehouse_city_ids.setdefault(warehouse_id, []).append(item.get("city_id"))
+        for warehouse_id in item.get("warehouse_ids", []):
+            if not warehouse_id:
+                continue
+            city_id = item.get("city_id")
+            if not city_id:
+                continue
+            warehouse_city_ids.setdefault(warehouse_id, set()).add(city_id)
 
     actions = [
         {
             "_op_type": "update",
             "_index": ADDITIONAL_INDEX_NAME,
             "_id": warehouse_id,
-            "doc": {"city_ids": city_ids},
+            "doc": {"city_ids": list(city_ids)},
             "doc_as_upsert": True,
         }
         for warehouse_id, city_ids in warehouse_city_ids.items()
+        if warehouse_id and city_ids
     ]
 
     try:

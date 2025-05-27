@@ -116,7 +116,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
                 "doc_as_upsert": True,  # optional: creates if not exists
             }
         )
-        logging.info(f"ACTIONS: {actions}")
+    logging.info(f"ACTIONS: {actions}")
 
     if actions:
         try:

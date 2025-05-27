@@ -87,13 +87,13 @@ def upsert_city_ids_in_warehouse_callable(**context):
     warehouse_city_ids = {}
     for item in items:
         warehouse_ids = item.get("warehouse_ids")
-        logging.info(f"warehouse_ids: {warehouse_ids}")
-
         for warehouse_id in warehouse_ids:
             if not warehouse_id:
+                logging.info(f"warehouse_id is empty: {warehouse_id}")
                 continue
             city_id = item.get("city_id")
             if not city_id:
+                logging.info(f"city_id is empty: {city_id}")
                 continue
             logging.info(f"WID: {warehouse_id}, CITY_ID: {city_id}")
             warehouse_city_ids.setdefault(warehouse_id, set()).add(city_id)

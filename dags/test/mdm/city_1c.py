@@ -73,7 +73,9 @@ def upsert_city_ids_in_warehouse_callable(**context):
     items = context["ti"].xcom_pull(
         key="normalized_data", task_ids="normalize_data_task"
     )
+    logging.info(f"Pulled items for upsert_city_ids_in_warehouse: {items}")
     if not items:
+        logging.info("No items found, exiting.")
         return
 
     hosts = ["http://mdm.default:9200"]

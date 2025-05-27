@@ -104,7 +104,6 @@ def upsert_city_ids_in_warehouse_callable(**context):
             "_index": ADDITIONAL_INDEX_NAME,
             "_id": warehouse_id,
             "doc": {"city_ids": list(city_ids)},
-            "doc_as_upsert": True,
         }
         for warehouse_id, city_ids in warehouse_city_ids.items()
         if warehouse_id and city_ids

@@ -25,7 +25,7 @@ def fetch_with_retry(url: str, params=None, retries=REQUEST_MAX_RETRIES):
                 raise
 
 def clean_tmp_file(file_path: str):
-    if file_path == "":
+    if file_path == "" or file_path is None:
         return
 
     if os.path.exists(file_path):

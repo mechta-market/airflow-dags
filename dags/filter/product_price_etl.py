@@ -308,7 +308,7 @@ def transform_base_price_callable(**context):
         batch = product_ids[i:i + BATCH_SIZE]
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {
-                executor.submit(process_single_product, pid, cities_dict): pid for pid in batch
+                executor.submit(process_single_product, pid): pid for pid in batch
             }
             for future in as_completed(futures):
                 product_id, base_prices = future.result()
@@ -371,43 +371,44 @@ def load_base_price_callable(**context):
         raise Exception(f"Bulk update failed: {bulk_error}") 
 
 def load_final_price_callable(**context):
-    file_path = context["ti"].xcom_pull(
-        key="product_final_price_file_path", task_ids="transform_final_price_task"
-    )
+    logging.info("final_price done")
+    # file_path = context["ti"].xcom_pull(
+    #     key="product_final_price_file_path", task_ids="transform_final_price_task"
+    # )
 
-    if not file_path or not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+    # if not file_path or not os.path.exists(file_path):
+    #     raise FileNotFoundError(f"File not found: {file_path}")
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        product_warehouses_dict = json.load(f)
+    # with open(file_path, "r", encoding="utf-8") as f:
+    #     product_warehouses_dict = json.load(f)
     
-    hosts = ["http://mdm.default:9200"]
-    es_hook = ElasticsearchPythonHook(
-        hosts=hosts,
-    )
-    client = es_hook.get_conn
+    # hosts = ["http://mdm.default:9200"]
+    # es_hook = ElasticsearchPythonHook(
+    #     hosts=hosts,
+    # )
+    # client = es_hook.get_conn
 
-    actions = []
-    for product_id, final_price in product_warehouses_dict.items():
-        actions.append({
-            "_op_type": "update",
-            "_index": INDEX_NAME,
-            "_id": product_id,
-            "retry_on_conflict": 3,
-            "doc": { 
-                "final_price": final_price 
-            },
-        })
+    # actions = []
+    # for product_id, final_price in product_warehouses_dict.items():
+    #     actions.append({
+    #         "_op_type": "update",
+    #         "_index": INDEX_NAME,
+    #         "_id": product_id,
+    #         "retry_on_conflict": 3,
+    #         "doc": { 
+    #             "final_price": final_price 
+    #         },
+    #     })
 
-    try:
-        success, errors = helpers.bulk(
-            client, actions, refresh="wait_for", stats_only=False
-        )
-        logging.info(f"Successfully updated {success} documents.")
-        if errors:
-            logging.error(f"Errors encountered during bulk update: {errors}")
-    except BulkIndexError as bulk_error:
-        raise Exception(f"Bulk update failed: {bulk_error}") 
+    # try:
+    #     success, errors = helpers.bulk(
+    #         client, actions, refresh="wait_for", stats_only=False
+    #     )
+    #     logging.info(f"Successfully updated {success} documents.")
+    #     if errors:
+    #         logging.error(f"Errors encountered during bulk update: {errors}")
+    # except BulkIndexError as bulk_error:
+    #     raise Exception(f"Bulk update failed: {bulk_error}") 
 
 def cleanup_temp_files_callable(**context):
     file_path = context["ti"].xcom_pull(

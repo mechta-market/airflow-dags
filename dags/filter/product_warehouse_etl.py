@@ -340,7 +340,7 @@ def cleanup_temp_files_callable(**context):
     clean_tmp_file(file_path)
 
     file_path = context["ti"].xcom_pull(
-        key="warehouse_file_path", task_ids="get_warehouse_task"
+        key="warehouses_file_path", task_ids="get_warehouse_task"
     )
     clean_tmp_file(file_path)
 

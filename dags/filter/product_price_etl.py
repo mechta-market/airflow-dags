@@ -356,7 +356,7 @@ def transform_final_price_callable(**context):
     BATCH_SIZE = 100
     BASE_URL = "http://price.default"
 
-    product_base_price_dict: Dict[str, List[Dict[str, Any]]] = {}
+    product_final_price_dict: Dict[str, List[Dict[str, Any]]] = {}
 
     def process_single_product(product_id: str) -> (str, List[Dict[str, Any]]):
         final_price = {}
@@ -430,7 +430,7 @@ def transform_final_price_callable(**context):
 
         return product_id, result
 
-    product_base_price_dict = {}
+    product_final_price_dict = {}
 
     for i in range(0, len(product_ids), BATCH_SIZE):
         batch = product_ids[i:i + BATCH_SIZE]
@@ -440,19 +440,18 @@ def transform_final_price_callable(**context):
             }
             for future in as_completed(futures):
                 product_id, final_prices = future.result()
-                if final_prices:
-                    product_base_price_dict[product_id] = final_prices
+                product_final_price_dict[product_id] = final_prices
 
     # save
 
     DATA_FILE_PATH = f"/tmp/{DAG_ID}.product_final_price.json"
     try:
         with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
-            json.dump(dict(product_base_price_dict), f, ensure_ascii=False)
+            json.dump(dict(product_final_price_dict), f, ensure_ascii=False)
     except IOError as e:
         raise Exception(f"Task failed: couldn't save file to {DATA_FILE_PATH}") from e
     
-    logging.info(f"product_final_price data are saved: {len(product_base_price_dict)}")
+    logging.info(f"product_final_price data are saved: {len(product_final_price_dict)}")
     context["ti"].xcom_push(key="product_final_price_file_path", value=DATA_FILE_PATH)
 
 def load_base_price_callable(**context):

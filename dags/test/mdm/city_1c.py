@@ -12,7 +12,8 @@ from elasticsearch.helpers import BulkIndexError
 
 DICTIONARY_NAME = "city"
 INDEX_NAME = f"{DICTIONARY_NAME}_1c"
-ADDITIONAL_INDEX_NAME = "warehouse_1c"
+WAREHOUSE_INDEX_NAME = "warehouse_1c"
+SUBDIVISION_INDEX_NAME = "subdivision_1c"
 NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
 
 
@@ -28,9 +29,38 @@ def fetch_data_callable(**context) -> None:
     context["ti"].xcom_push(key="fetched_data", value=response.get("data"))
 
 
+def fetch_data_from_subdivision_callable(**context):
+    items = context["ti"].xcom_pull(key="fetched_data", task_ids="fetch_data_task")
+    if not items:
+        return
+
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
+
+    query = {"query": {"match_all": {}}, "_source": ["node_id"]}
+
+    response = client.search(index=SUBDIVISION_INDEX_NAME, body=query, scroll="2m")
+
+    subdivision_map = {
+        hit["_id"]: hit["_source"].get("node_id") for hit in response["hits"]["hits"]
+    }
+
+    for item in items:
+        subdivision_id = item.get("cb_subdivision_id")
+        if subdivision_id in subdivision_map:
+            item["cb_node_id"] = subdivision_map[subdivision_id]
+
+    context["ti"].xcom_push(key="fetched_data_from_subdivision", value=items)
+
+
 def normalize_data_callable(**context) -> None:
     """Нормализация данных перед загрузкой в Elasticsearch."""
-    items = context["ti"].xcom_pull(key="fetched_data", task_ids="fetch_data_task")
+    items = context["ti"].xcom_pull(
+        key="fetched_data_from_subdivision", task_ids="fetch_data_from_subdivision_task"
+    )
     if not items:
         return
 
@@ -108,7 +138,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
         actions.append(
             {
                 "_op_type": "update",
-                "_index": ADDITIONAL_INDEX_NAME,
+                "_index": WAREHOUSE_INDEX_NAME,
                 "_id": warehouse_id,
                 "doc": {"city_ids": list(city_ids)},
                 "doc_as_upsert": True,  # optional: creates if not exists
@@ -149,6 +179,12 @@ with DAG(
         provide_context=True,
     )
 
+    fetch_data_from_subdivision = PythonOperator(
+        task_id="fetch_data_from_subdivision_task",
+        python_callable=fetch_data_from_subdivision_callable,
+        provide_context=True,
+    )
+
     normalize_data = PythonOperator(
         task_id="normalize_data_task",
         python_callable=normalize_data_callable,
@@ -167,4 +203,9 @@ with DAG(
         provide_context=True,
     )
 
-    fetch_data >> normalize_data >> [upsert_to_es, upsert_city_ids_in_warehouse]
+    (
+        fetch_data
+        >> fetch_data_from_subdivision
+        >> normalize_data
+        >> [upsert_to_es, upsert_city_ids_in_warehouse]
+    )

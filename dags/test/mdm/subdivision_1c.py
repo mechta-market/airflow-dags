@@ -35,6 +35,12 @@ def normalize_data_callable(**context) -> None:
     for item in items:
         if item.get("id") == ZERO_UUID:
             continue
+        sell_warehouse_ids = []
+        for sell_warehouse_id in item.get("sell_warehouse_ids"):
+            if sell_warehouse_id == ZERO_UUID:
+                continue
+            sell_warehouse_ids.append(sell_warehouse_id)
+        item["sell_warehouse_ids"] = sell_warehouse_ids
         normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
 
     context["ti"].xcom_push(key="normalized_data", value=normalized)

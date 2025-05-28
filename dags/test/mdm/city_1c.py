@@ -64,6 +64,7 @@ def fetch_data_from_subdivision_callable(**context):
     subdivision_map = {
         hit["_id"]: hit["_source"].get("node_id") for hit in response["hits"]["hits"]
     }
+    logging.info(f"subdivision_map: {subdivision_map}")
 
     for item in items:
         subdivision_id = item.get("cb_subdivision_id")

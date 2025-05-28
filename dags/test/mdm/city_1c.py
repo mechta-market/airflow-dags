@@ -59,7 +59,9 @@ def fetch_data_from_subdivision_callable(**context):
 
     query = {"query": {"match_all": {}}}
 
-    response = client.search(index=SUBDIVISION_INDEX_NAME, body=query, scroll="2m")
+    response = client.search(
+        index=SUBDIVISION_INDEX_NAME, body=query, size=100, scroll="2m"
+    )
 
     subdivision_map = {
         hit["_id"]: hit["_source"].get("node_id") for hit in response["hits"]["hits"]

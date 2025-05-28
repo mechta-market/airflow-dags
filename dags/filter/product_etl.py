@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from utils import fetch_with_retry, clean_tmp_file
+from filter.utils import fetch_with_retry, clean_tmp_file
 
 import requests
 from elasticsearch import helpers

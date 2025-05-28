@@ -165,10 +165,15 @@ def upsert_to_es_callable(**context):
         logging.info(f"Successfully updated {success} documents.")
         if errors:
             logging.error(f"Errors encountered: {errors}")
-            return
     except BulkIndexError as bulk_error:
         logging.error(f"Bulk update failed: {bulk_error}")
-        return
+        for err in bulk_error.errors:
+            op_type, result = next(iter(err.items()))
+            doc_id = result.get("_id")
+            error = result.get("error", {})
+            reason = error.get("reason") or error.get("caused_by", {}).get("reason")
+            logging.error(f"  Doc {doc_id} failed on {op_type}: {reason}")
+        raise
 
 
 default_args = {

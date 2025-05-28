@@ -172,7 +172,7 @@ def upsert_to_es_callable(**context):
             doc_id = result.get("_id")
             error = result.get("error", {})
             reason = error.get("reason") or error.get("caused_by", {}).get("reason")
-            logging.error(f"  Doc {doc_id} failed on {op_type}: {reason}")
+            logging.info(f"  Doc {doc_id} failed on {op_type}: {reason}")
         raise
 
 

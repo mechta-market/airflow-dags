@@ -54,7 +54,7 @@ def fetch_data_from_subdivision_callable(**context):
     if not items:
         return
 
-    client = elastic_conn()
+    client = elastic_conn(Variable.get("elastic_scheme"))
 
     query = {"query": {"match_all": {}}}
 
@@ -84,7 +84,7 @@ def upsert_to_es_callable(**context):
     if not items:
         return
 
-    client = elastic_conn()
+    client = elastic_conn(Variable.get("elastic_scheme"))
 
     for item in items:
         doc_id = item.get("id")
@@ -107,7 +107,7 @@ def upsert_city_ids_in_warehouse_callable(**context):
         logging.info("No items found, exiting.")
         return
 
-    client = elastic_conn()
+    client = elastic_conn(Variable.get("elastic_scheme"))
 
     warehouse_city_ids = {}
     for item in items:

@@ -2,6 +2,7 @@ from datetime import datetime
 from helpers.utils import elastic_conn, request_to_nsi_api
 
 from airflow import DAG
+from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 
 
@@ -20,7 +21,7 @@ def upsert_to_es_callable(**context):
     if not items:
         return
 
-    client = elastic_conn()
+    client = elastic_conn(Variable.get("elastic_scheme"))
 
     for item in items:
         doc_id = item.get("id")

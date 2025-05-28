@@ -79,7 +79,7 @@ def upsert_to_es_callable(**context):
         print("Data file not found.")
         return
 
-    client = elastic_conn()
+    client = elastic_conn(Variable.get("elastic_scheme"))
 
     with open(file_path, "r", encoding="utf-8") as f:
         items = json.load(f)

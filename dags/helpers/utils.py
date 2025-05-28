@@ -48,8 +48,8 @@ def request_to_nsi_api(host: str, endpoint: str) -> dict:
     return response.json()
 
 
-def elastic_conn() -> Any:
-    hosts = ["http://mdm.default:9200"]
+def elastic_conn(scheme: str) -> Any:
+    hosts = [scheme]
     es_hook = ElasticsearchPythonHook(
         hosts=hosts,
     )

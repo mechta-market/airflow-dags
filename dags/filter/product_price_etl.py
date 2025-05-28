@@ -350,6 +350,10 @@ def transform_final_price_callable(**context):
     with open(subdivisions_file_path, "r", encoding="utf-8") as f:
         subdivisions_dict = json.load(f)
 
+    # !
+    print(subdivisions_dict)
+    print("###############")
+
     # do
 
     MAX_WORKERS = 5
@@ -418,6 +422,8 @@ def transform_final_price_callable(**context):
         
         if final_price.get("price", 0):
             for sb_id, obj in subdivisions_dict.items():
+                if "city_id" not in obj or not obj["city_id"]:
+                        logging.warning(f"subdivision_id={sb_id} has missing city_id: {obj}")
                 if sb_id not in subdivisions_set:
                     result.append(
                         DocumentFinalPrice(
@@ -565,7 +571,7 @@ with DAG(
     default_args=default_args,
     description='DAG to upload product_price data from Price service to Elasticsearch index',
     start_date=datetime(2025, 5, 22, 0, 30),
-    schedule="*/60 * * * *",
+    schedule="*/30 * * * *",
     catchup=False,
     tags=["nsi", "elasticsearch", "price"],
 ) as dag:

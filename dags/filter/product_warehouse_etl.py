@@ -252,4 +252,4 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    get_product_ids_callable >> [get_warehouse, get_city_warehouse] >> transform_data >> load_data >> cleanup_temp_files
+    get_product_ids >> [get_warehouse, get_city_warehouse] >> transform_data >> load_data >> cleanup_temp_files

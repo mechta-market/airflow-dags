@@ -66,6 +66,67 @@ def fetch_data_callable(**context):
     context["ti"].xcom_push(key="data_file_path", value=DATA_FILE_PATH)
 
 
+def delete_previous_data_callable(**context):
+    file_path = context["ti"].xcom_pull(
+        key="data_file_path", task_ids="fetch_data_task"
+    )
+    
+    with open(file_path, "r", encoding="utf-8") as f:
+        items = json.load(f)
+    if not items:
+        return
+    
+    incoming_ids = [item["id"] for item in items if item.get("id") is not None]
+
+    
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
+
+    existing_ids_query = {
+        "query": {
+            "nested": {
+                "path": "actions",
+                "query": {
+                    "match_all": {}
+                }
+            }
+        }
+    }
+    
+    try:
+        response = client.search(index=INDEX_NAME, body=existing_ids_query, scroll="2m")
+        scroll_id = response["_scroll_id"]
+        existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
+
+        while len(response["hits"]["hits"]) > 0:
+            response = client.scroll(scroll_id=scroll_id, scroll="2m")
+            existing_ids.update(hit["_id"] for hit in response["hits"]["hits"])
+
+    except Exception as e:
+        logging.error(f"Failed to fetch existing IDs from Elasticsearch: {e}")
+        return
+    
+    ids_to_delete = existing_ids - set(incoming_ids)
+    
+    for doc_id in ids_to_delete:
+        client.update(
+            index=INDEX_NAME,
+            id=doc_id,
+            body={
+                "script": {
+                    "lang": "painless",
+                    "source": "ctx._source.actions = []"
+                }
+            }
+        )
+        
+    logging.info(f"Updated {len(ids_to_delete)} fields to empty actions")
+
+    
+    
 def upsert_to_es_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="data_file_path", task_ids="fetch_data_task"
@@ -95,6 +156,7 @@ def upsert_to_es_callable(**context):
         for item in items
         if item.get("id")
     ]
+    logging.info(f"ACTIONS COUNT {len(actions)}.")
 
     try:
         success, errors = helpers.bulk(
@@ -126,11 +188,17 @@ with DAG(
         python_callable=fetch_data_callable,
         provide_context=True,
     )
-
+    
+    delete_previous_data = PythonOperator(
+        task_id="delete_previous_data_task",
+        python_callable=delete_previous_data_callable,
+        provide_context=True,
+    )
+    
     upsert_to_es = PythonOperator(
         task_id="upsert_to_es_task",
         python_callable=upsert_to_es_callable,
         provide_context=True,
     )
 
-    fetch_data >> upsert_to_es
+    fetch_data >> delete_previous_data >> upsert_to_es

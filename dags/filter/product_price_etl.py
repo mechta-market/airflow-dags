@@ -206,16 +206,208 @@ def get_subdivision_callable(**context):
     context["ti"].xcom_push(key="subdivisions_file_path", value=DATA_FILE_PATH)
 
 def transform_base_price_callable(**context):
-    logging.info("transform_base_price task done")
+    product_ids = []
+    cities_dict = {}
+
+    product_ids_file_path = context["ti"].xcom_pull(
+        key="product_ids_file_path", task_ids="get_product_ids_task"
+    )
+
+    if not product_ids_file_path or not os.path.exists(product_ids_file_path):
+        raise FileNotFoundError(f"File not found: {product_ids_file_path}")
+
+    with open(product_ids_file_path, "r", encoding="utf-8") as f:
+        product_ids = json.load(f)
+
+    cities_file_path = context["ti"].xcom_pull(
+        key="cities_file_path", task_ids="get_city_task"
+    )
+
+    if not cities_file_path or not os.path.exists(cities_file_path):
+        raise FileNotFoundError(f"File not found: {cities_file_path}")
+
+    with open(cities_file_path, "r", encoding="utf-8") as f:
+        cities_dict = json.load(f)
+
+    # do
+
+    MAX_WORKERS = 5
+    BATCH_SIZE = 100
+    BASE_URL = "http://price.default"
+
+    product_base_price_dict: Dict[str, List[Dict[str, Any]]] = {}
+
+    def process_single_product(product_id: str) -> (str, List[Dict[str, Any]]):
+        base_price = {}
+        spec_base_prices = []
+
+        try:
+            response = requests.get(
+                f"{BASE_URL}/base_price/{product_id}",
+                timeout=10,
+            )
+            response.raise_for_status()
+            base_price = response.json()
+        except requests.RequestException as e:
+            logging.warning(f"Failed to fetch base_price for product_id={product_id}: {e}")
+            return product_id, []
+
+        try:
+            response = requests.get(
+                f"{BASE_URL}/spec_base_price",
+                params={
+                    "list_params.page_size": 1000,
+                    "product_id": product_id,
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            data = response.json()
+            spec_base_prices = data.get("results", [])
+        except requests.RequestException as e:
+            logging.warning(f"Failed to fetch warehouse data for product_id={product_id}: {e}")
+            return product_id, []
+        
+        cities_set = set()
+        result = []
+
+        if Decimal(base_price.get("price", 0)) != Decimal(0):
+            result.append(
+                DocumentBasePrice(
+                    city_id=ASTANA_CITY_ID,
+                    price=base_price.price,
+                ).to_dict()
+            )
+            cities_set.add(ASTANA_CITY_ID)
+
+        for sbp in spec_base_prices:
+            if Decimal(sbp.get("price", 0)) != Decimal(0):
+                result.append(
+                    DocumentBasePrice(
+                        city_id=sbp["city_id"],
+                        price=Decimal(sbp["price"]),
+                    ).to_dict()
+                )
+                cities_set.add(sbp["city_id"])
+
+        
+        if base_price.get("price", 0) != Decimal(0):
+            for city_id in cities_dict.keys():
+                if city_id not in cities_set:
+                    result.append(
+                        DocumentBasePrice(
+                            city_id=city_id,
+                            price=Decimal(base_price.get("price", 0)),
+                        ).to_dict()
+                    )
+        return product_id, result
+
+    product_base_price_dict = {}
+
+    for i in range(0, len(product_ids), BATCH_SIZE):
+        batch = product_ids[i:i + BATCH_SIZE]
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(process_single_product, pid, cities_dict): pid for pid in batch
+            }
+            for future in as_completed(futures):
+                product_id, base_prices = future.result()
+                if base_prices:
+                    product_base_price_dict[product_id] = base_prices
+
+    # save
+
+    DATA_FILE_PATH = f"/tmp/{DAG_ID}.product_base_price.json"
+    try:
+        with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(dict(product_base_price_dict), f, ensure_ascii=False)
+    except IOError as e:
+        raise Exception(f"Task failed: couldn't save file to {DATA_FILE_PATH}") from e
+    
+    logging.info(f"product_warehouse data are saved: {len(product_base_price_dict)}")
+    context["ti"].xcom_push(key="product_base_price_file_path", value=DATA_FILE_PATH)
+
 
 def transform_final_price_callable(**context):
     logging.info("transform_final_price task done")
 
 def load_base_price_callable(**context):
-    logging.info("load_base_price task done")
+    file_path = context["ti"].xcom_pull(
+        key="product_base_price_file_path", task_ids="transform_base_price_task"
+    )
+
+    if not file_path or not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        product_warehouses_dict = json.load(f)
+    
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
+
+    actions = []
+    for product_id, base_price in product_warehouses_dict.items():
+        actions.append({
+            "_op_type": "update",
+            "_index": INDEX_NAME,
+            "_id": product_id,
+            "retry_on_conflict": 3,
+            "doc": { 
+                "base_price": base_price 
+            },
+        })
+
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
+        )
+        logging.info(f"Successfully updated {success} documents.")
+        if errors:
+            logging.error(f"Errors encountered during bulk update: {errors}")
+    except BulkIndexError as bulk_error:
+        raise Exception(f"Bulk update failed: {bulk_error}") 
 
 def load_final_price_callable(**context):
-    logging.info("load_final_price task done")
+    file_path = context["ti"].xcom_pull(
+        key="product_final_price_file_path", task_ids="transform_final_price_task"
+    )
+
+    if not file_path or not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        product_warehouses_dict = json.load(f)
+    
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
+
+    actions = []
+    for product_id, final_price in product_warehouses_dict.items():
+        actions.append({
+            "_op_type": "update",
+            "_index": INDEX_NAME,
+            "_id": product_id,
+            "retry_on_conflict": 3,
+            "doc": { 
+                "final_price": final_price 
+            },
+        })
+
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
+        )
+        logging.info(f"Successfully updated {success} documents.")
+        if errors:
+            logging.error(f"Errors encountered during bulk update: {errors}")
+    except BulkIndexError as bulk_error:
+        raise Exception(f"Bulk update failed: {bulk_error}") 
 
 def cleanup_temp_files_callable(**context):
     file_path = context["ti"].xcom_pull(
@@ -230,6 +422,16 @@ def cleanup_temp_files_callable(**context):
 
     file_path = context["ti"].xcom_pull(
         key="subdivisions_file_path", task_ids="get_subdivision_task"
+    )
+    clean_tmp_file(file_path)
+
+    file_path = context["ti"].xcom_pull(
+        key="product_base_price_file_path", task_ids="transform_base_price_task"
+    )
+    clean_tmp_file(file_path)
+
+    file_path = context["ti"].xcom_pull(
+        key="product_final_price_file_path", task_ids="transform_final_price_task"
     )
     clean_tmp_file(file_path)
 

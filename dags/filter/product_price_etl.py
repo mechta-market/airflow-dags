@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import Any, Dict, List
-from decimal import Decimal
 
 from filter.utils import fetch_with_retry, clean_tmp_file
 
@@ -42,7 +41,7 @@ logging.basicConfig(level=logging.INFO)
 # Functions
 
 class DocumentBasePrice:
-    def __init__(self, city_id: str, price: Decimal):
+    def __init__(self, city_id: str, price: float):
         self.city_id = city_id
         self.price = price
 
@@ -53,7 +52,7 @@ class DocumentBasePrice:
         }
 
 class DocumentFinalPrice:
-    def __init__(self, city_id: str, subdivision_id: str, is_i_shop: bool, price: Decimal):
+    def __init__(self, city_id: str, subdivision_id: str, is_i_shop: bool, price: float):
         self.city_id = city_id
         self.subdivision_id = subdivision_id
         self.is_i_shop = is_i_shop
@@ -271,7 +270,7 @@ def transform_base_price_callable(**context):
         cities_set = set()
         result = []
 
-        if Decimal(base_price.get("price", 0)) != Decimal(0):
+        if base_price.get("price", 0):
             result.append(
                 DocumentBasePrice(
                     city_id=ASTANA_CITY_ID,
@@ -281,23 +280,23 @@ def transform_base_price_callable(**context):
             cities_set.add(ASTANA_CITY_ID)
 
         for sbp in spec_base_prices:
-            if Decimal(sbp.get("price", 0)) != Decimal(0):
+            if sbp.get("price", 0):
                 result.append(
                     DocumentBasePrice(
-                        city_id=sbp["city_id"],
-                        price=Decimal(sbp["price"]),
+                        city_id=sbp.get("city_id", ""),
+                        price=sbp.get("price", 0),
                     ).to_dict()
                 )
-                cities_set.add(sbp["city_id"])
+                cities_set.add(sbp.get("city_id"))
 
         
-        if Decimal(base_price.get("price", 0)) != Decimal(0):
+        if base_price.get("price", 0):
             for city_id in cities_dict.keys():
                 if city_id not in cities_set:
                     result.append(
                         DocumentBasePrice(
                             city_id=city_id,
-                            price=Decimal(base_price.get("price", 0)),
+                            price=base_price.get("price", 0),
                         ).to_dict()
                     )
         return product_id, result

@@ -4,8 +4,9 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from collections import defaultdict
+from typing import Any, Dict, List
 
-from filter.utils import fetch_with_retry, clean_tmp_file, REQUEST_TIMEOUT
+from filter.utils import fetch_with_retry, clean_tmp_file
 
 import requests
 from elasticsearch import helpers
@@ -33,6 +34,23 @@ INDEX_NAME = "product_v1"
 # Configurations
 
 logging.basicConfig(level=logging.INFO)
+
+# Functions
+
+class DocumentWarehouse:
+    def __init__(self, id: str, classification: str, city_ids: List[str], real_value: int):
+        self.id = id
+        self.classification = classification
+        self.city_ids = city_ids
+        self.real_value = real_value
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "classification": self.classification,
+            "city_id": self.city_ids,
+            "real_value": self.real_value,
+        }
 
 # Tasks
 
@@ -177,11 +195,145 @@ def get_city_warehouse_callable(**context):
 
 
 def transform_data_callable(**context):
-    logging.info("product_warehouse are transformed.")
+    product_ids = []
+    warehouses_dict = {}
+    warehouse_cities_dict = {}
+
+    product_ids_file_path = context["ti"].xcom_pull(
+        key="product_ids_file_path", task_ids="get_product_ids_task"
+    )
+
+    if not product_ids_file_path or not os.path.exists(product_ids_file_path):
+        raise FileNotFoundError(f"File not found: {product_ids_file_path}")
+
+    with open(product_ids_file_path, "r", encoding="utf-8") as f:
+        product_ids = json.load(f)
+
+    warehouses_file_path = context["ti"].xcom_pull(
+        key="warehouses_file_path", task_ids="get_warehouse_task"
+    )
+
+    if not warehouses_file_path or not os.path.exists(warehouses_file_path):
+        raise FileNotFoundError(f"File not found: {warehouses_file_path}")
+
+    with open(warehouses_file_path, "r", encoding="utf-8") as f:
+        warehouses_dict = json.load(f)
+
+    warehouse_cities_file_path = context["ti"].xcom_pull(
+        key="warehouse_cities_file_path", task_ids="get_city_warehouse_task"
+    )
+
+    if not warehouse_cities_file_path or not os.path.exists(warehouse_cities_file_path):
+        raise FileNotFoundError(f"File not found: {warehouse_cities_file_path}")
+
+    with open(warehouse_cities_file_path, "r", encoding="utf-8") as f:
+        warehouse_cities_dict = json.load(f)
+
+    # do
+
+    MAX_WORKERS = 5
+    BATCH_SIZE = 100
+    BASE_URL = "http://store.default"
+
+    product_warehouse_dict: Dict[str, List[Dict[str, Any]]] = {}
+
+    def process_single_product(product_id: str) -> (str, List[Dict[str, Any]]):
+        try:
+            response = requests.get(
+                f"{BASE_URL}/product_warehouse",
+                params={
+                    "list_params.page_size": 1000,
+                    "product_id": product_id,
+                    "has_real_value": True,
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as e:
+            logging.warning(f"Failed to fetch warehouse data for product_id={product_id}: {e}")
+            return product_id, []
+        
+        results = data.get("results", [])
+        if not results:
+            return product_id, []
+        
+        raw_list = [item for item in results if "warehouse_id" in item]
+        documents = []
+        for raw in raw_list:
+            warehouse_id = raw["warehouse_id"]
+            doc = DocumentWarehouse(
+                id=warehouse_id,
+                classification=warehouses_dict.get(warehouse_id, {}).get("classification", ""),
+                city_ids=warehouse_cities_dict.get(warehouse_id, []),
+                real_value=raw["real_value"]
+            )
+            documents.append(doc.to_dict())
+
+        return product_id, documents
+
+    for i in range(0, len(product_ids), BATCH_SIZE):
+        batch = product_ids[i:i + BATCH_SIZE]
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {executor.submit(process_single_product, pid): pid for pid in batch}
+            for future in as_completed(futures):
+                product_id, docs = future.result()
+                if docs:
+                    product_warehouse_dict[product_id] = docs
+
+    # save
+
+    DATA_FILE_PATH = f"/tmp/{DAG_ID}.product_warehouse.json"
+    try:
+        with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(dict(product_warehouse_dict), f, ensure_ascii=False)
+    except IOError as e:
+        raise Exception(f"Task failed: couldn't save file to {DATA_FILE_PATH}") from e
+    
+    logging.info(f"product_warehouse data are saved: {len(product_warehouse_dict)}")
+    context["ti"].xcom_push(key="product_warehouse_file_path", value=DATA_FILE_PATH)
 
 
 def load_data_callable(**context):
-    logging.info("product_warehouse are loaded.")
+    file_path = context["ti"].xcom_pull(
+        key="product_warehouse_file_path", task_ids="transform_data_task"
+    )
+
+    if not file_path or not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        product_warehouses_dict = json.load(f)
+    
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
+
+    actions = []
+    for product_id, warehouses in product_warehouses_dict.items():
+        action = [
+            {
+                "_op_type": "update",
+                "_index": INDEX_NAME,
+                "_id": product_id,
+                "doc": { 
+                    "warehouses": warehouses 
+                },
+            }
+        ]
+        actions.append(action)
+
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
+        )
+        logging.info(f"Successfully updated {success} documents.")
+        if errors:
+            logging.error(f"Errors encountered during bulk update: {errors}")
+    except BulkIndexError as bulk_error:
+        raise Exception(f"Bulk update failed: {bulk_error}") 
 
 
 def cleanup_temp_files_callable(**context):
@@ -200,8 +352,13 @@ def cleanup_temp_files_callable(**context):
     )
     clean_tmp_file(file_path)
 
+    file_path = context["ti"].xcom_pull(
+        key="product_warehouse_file_path", task_ids="transform_data_task"
+    )
+    clean_tmp_file(file_path)
 
-# DAG initialization.
+# DAG 
+
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,

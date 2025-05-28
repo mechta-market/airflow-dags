@@ -57,7 +57,7 @@ def fetch_data_from_subdivision_callable(**context):
     )
     client = es_hook.get_conn
 
-    query = {"query": {"match_all": {}}, "_source": ["node_id"]}
+    query = {"query": {"match_all": {}}}
 
     response = client.search(index=SUBDIVISION_INDEX_NAME, body=query, scroll="2m")
 

@@ -271,7 +271,7 @@ def transform_base_price_callable(**context):
         cities_set = set()
         result = []
 
-        if Decimal(base_price.get("price", 0)) != Decimal(0):
+        if Decimal(base_price["price"]) != Decimal(0):
             result.append(
                 DocumentBasePrice(
                     city_id=ASTANA_CITY_ID,
@@ -281,7 +281,7 @@ def transform_base_price_callable(**context):
             cities_set.add(ASTANA_CITY_ID)
 
         for sbp in spec_base_prices:
-            if Decimal(sbp.get("price", 0)) != Decimal(0):
+            if Decimal(sbp["price"]) != Decimal(0):
                 result.append(
                     DocumentBasePrice(
                         city_id=sbp["city_id"],
@@ -291,13 +291,13 @@ def transform_base_price_callable(**context):
                 cities_set.add(sbp["city_id"])
 
         
-        if base_price.get("price", 0) != Decimal(0):
+        if Decimal(base_price["price"]) != Decimal(0):
             for city_id in cities_dict.keys():
                 if city_id not in cities_set:
                     result.append(
                         DocumentBasePrice(
                             city_id=city_id,
-                            price=Decimal(base_price.get("price", 0)),
+                            price=Decimal(base_price["price"]),
                         ).to_dict()
                     )
         return product_id, result

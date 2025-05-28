@@ -350,10 +350,6 @@ def transform_final_price_callable(**context):
     with open(subdivisions_file_path, "r", encoding="utf-8") as f:
         subdivisions_dict = json.load(f)
 
-    # !
-    print(subdivisions_dict)
-    print("###############")
-
     # do
 
     MAX_WORKERS = 5
@@ -399,10 +395,10 @@ def transform_final_price_callable(**context):
         if final_price.get("price", 0):
             result.append(
                 DocumentFinalPrice(
-                    city_id=ASTANA_CITY_ID,
                     subdivision_id=ASTANA_OFFICE_SUBDIVISION_ID,
-                    is_i_shop=True,
                     price=final_price.get("price", 0),
+                    city_id=ASTANA_CITY_ID,
+                    is_i_shop=True,
                 ).to_dict()
             )
             subdivisions_set.add(ASTANA_OFFICE_SUBDIVISION_ID)
@@ -411,10 +407,10 @@ def transform_final_price_callable(**context):
             if sfp.get("price", 0) and subdivisions_dict.get(sfp.get("subdivision_id", "")):
                 result.append(
                     DocumentFinalPrice(
-                        city_id=sfp.get("city_id", ""),
                         subdivision_id=sfp.get("subdivision_id", ""),
-                        is_i_shop=sfp.get("is_i_shop", False),
                         price=sfp.get("price", 0),
+                        city_id=subdivisions_dict[sfp.get("subdivision_id")].get("city_id", ""),
+                        is_i_shop=subdivisions_dict[sfp.get("subdivision_id")].get("is_i_shop", False),
                     ).to_dict()
                 )
                 subdivisions_set.add(sfp.get("subdivision_id"))
@@ -422,15 +418,13 @@ def transform_final_price_callable(**context):
         
         if final_price.get("price", 0):
             for sb_id, obj in subdivisions_dict.items():
-                if "city_id" not in obj or not obj["city_id"]:
-                        logging.warning(f"subdivision_id={sb_id} has missing city_id: {obj}")
                 if sb_id not in subdivisions_set:
                     result.append(
                         DocumentFinalPrice(
-                            city_id=obj.get("city_id", ""),
                             subdivision_id=sb_id,
-                            is_i_shop=obj.get("is_i_shop", False),
                             price=final_price.get("price", 0),
+                            city_id=obj.get("city_id", ""),
+                            is_i_shop=obj.get("is_i_shop", False),
                         ).to_dict()
                     )
 

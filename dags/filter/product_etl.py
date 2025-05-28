@@ -6,6 +6,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
+from utils import fetch_with_retry, clean_tmp_file
+
 import requests
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
@@ -25,9 +27,6 @@ default_args = {
 }
 
 # Constants
-REQUEST_MAX_RETRIES=3
-REQUEST_RETRY_DELAY=1
-REQUEST_TIMEOUT=60
 
 INDEX_NAME = "product_v1"
 
@@ -35,31 +34,10 @@ DEFAULT_LANGUAGE = "ru"
 TARGET_LANGUAGES = ["ru", "kz"]
 
 # Configurations
+
 logging.basicConfig(level=logging.INFO)
 
 # Functions
-def fetch_with_retry(url: str, params=None, retries=REQUEST_MAX_RETRIES):
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException:
-            if attempt < retries - 1:
-                time.sleep(REQUEST_RETRY_DELAY * (attempt + 1))
-            else:
-                raise
-
-def clean_tmp_file(file_path: str):
-    if file_path == "":
-        return
-
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        logging.info(f"Temporary file removed: {file_path}")
-    else:
-        logging.info(f"File does not exist: {file_path}")
-
 
 class DocumentProduct:
     def __init__(self, p: dict):
@@ -199,8 +177,8 @@ def encode_document_product(p: dict) -> dict:
     dp = DocumentProduct(p)
     return dp.__dict__
 
+# Tasks
 
-# task #1: Get raw product data from NSI service and store data in temporary storage.
 def extract_data_callable(**context):
     BASE_URL = "http://nsi.default"
     MAX_WORKERS = 7
@@ -214,7 +192,7 @@ def extract_data_callable(**context):
     initial_response = requests.get(
         f"{BASE_URL}/product",
         params={"list_params.only_count": True},
-        timeout=REQUEST_TIMEOUT,
+        timeout=10,
     )
     initial_response.raise_for_status()
     initial_payload = initial_response.json()
@@ -288,7 +266,6 @@ def extract_data_callable(**context):
     context["ti"].xcom_push(key="extract_data_file_path", value=EXTRACT_DATA_FILE_PATH)
 
 
-# task #2: Transform product data to a target format and store in temporary store.
 def transform_data_callable(**context):
     MAX_WORKERS = 7
     TRANSFORM_DATA_FILE_PATH = f"/tmp/{DAG_ID}.transform_data.json"
@@ -319,7 +296,6 @@ def transform_data_callable(**context):
     context["ti"].xcom_push(key="transform_data_file_path", value=TRANSFORM_DATA_FILE_PATH)
 
 
-# task #3: Delete products in Elasticsearch that are not present in the transformed data.
 def delete_different_data_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="transform_data_file_path", task_ids="transform_data_task"
@@ -384,7 +360,6 @@ def delete_different_data_callable(**context):
     logging.info(f"Products are deleted: {len(ids_to_delete)}")
 
 
-# task #4: Upload transformed product data to Elasticsearch.
 def load_data_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="transform_data_file_path", task_ids="transform_data_task"
@@ -425,7 +400,6 @@ def load_data_callable(**context):
         raise Exception(f"Bulk update failed: {bulk_error}") 
 
 
-# task #5: Delete temporary data.
 def cleanup_temp_files_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="extract_data_file_path", task_ids="extract_data_task"
@@ -437,8 +411,8 @@ def cleanup_temp_files_callable(**context):
     )
     clean_tmp_file(file_path)
 
+# Dag
 
-# DAG initialization.
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,

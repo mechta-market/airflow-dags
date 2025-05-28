@@ -97,7 +97,7 @@ def delete_previous_data_callable(**context):
     }
     
     try:
-        response = client.search(index=INDEX_NAME, body=existing_ids_query, scroll="2m")
+        response = client.search(index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m")
         scroll_id = response["_scroll_id"]
         existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
 

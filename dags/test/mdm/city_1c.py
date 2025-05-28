@@ -64,16 +64,16 @@ def fetch_data_from_subdivision_callable(**context):
     )
 
     subdivision_map = {
-        hit["_id"]: hit["_source"].get("node_id") for hit in response["hits"]["hits"]
+        hit["_id"]: node_id
+        for hit in response["hits"]["hits"]
+        if (node_id := hit["_source"].get("node_id"))
     }
-    logging.info(f"subdivision_map: {subdivision_map}")
 
     for item in items:
         subdivision_id = item.get("cb_subdivision_id")
         if subdivision_id in subdivision_map:
             item["cb_node_id"] = subdivision_map[subdivision_id]
 
-    logging.info(items)
     context["ti"].xcom_push(key="fetched_data_from_subdivision", value=items)
 
 

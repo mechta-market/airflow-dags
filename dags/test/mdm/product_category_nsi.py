@@ -42,7 +42,7 @@ default_args = {
 with DAG(
     dag_id=f"{DICTIONARY_NAME}_nsi",
     default_args=default_args,
-    schedule_interval="45 */60 * * *",
+    schedule_interval="45 * * * *",
     start_date=datetime(2025, 5, 14),
     catchup=False,
     tags=["nsi", "elasticsearch"],

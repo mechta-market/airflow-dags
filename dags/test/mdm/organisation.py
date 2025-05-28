@@ -72,7 +72,7 @@ default_args = {
 with DAG(
     dag_id=f"{DICTIONARY_NAME}",
     default_args=default_args,
-    schedule_interval="15 */60 * * *",
+    schedule_interval="15 * * * *",
     start_date=datetime(2025, 5, 14),
     catchup=False,
     tags=["1c", "elasticsearch"],

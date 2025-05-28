@@ -142,7 +142,7 @@ def get_warehouse_callable(**context):
         raise Exception(f"Task failed: couldn't save file to {DATA_FILE_PATH}") from e
     
     logging.info(f"warehouse data are saved: {len(warehouses_dict)}")
-    context["ti"].xcom_push(key="warehouse_file_path", value=DATA_FILE_PATH)
+    context["ti"].xcom_push(key="warehouses_file_path", value=DATA_FILE_PATH)
 
 
 def get_city_warehouse_callable(**context):
@@ -313,17 +313,14 @@ def load_data_callable(**context):
 
     actions = []
     for product_id, warehouses in product_warehouses_dict.items():
-        action = [
-            {
-                "_op_type": "update",
-                "_index": INDEX_NAME,
-                "_id": product_id,
-                "doc": { 
-                    "warehouses": warehouses 
-                },
-            }
-        ]
-        actions.append(action)
+        actions.append({
+            "_op_type": "update",
+            "_index": INDEX_NAME,
+            "_id": product_id,
+            "doc": { 
+                "warehouses": warehouses 
+            },
+        })
 
     try:
         success, errors = helpers.bulk(

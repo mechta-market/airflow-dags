@@ -32,7 +32,7 @@ default_args = {
 
 INDEX_NAME = "product_v1"
 
-ASTANT_CITY_ID = "cc4316f8-4333-11ea-a22d-005056b6dbd7"
+ASTANA_CITY_ID = "cc4316f8-4333-11ea-a22d-005056b6dbd7"
 ASTANA_OFFICE_SUBDIVISION_ID = "3bd9bf4f-7dd7-11e8-a213-005056b6dbd7"
 
 # Configurations
@@ -98,6 +98,8 @@ def get_product_ids_callable(**context):
         while hits:
             scroll = client.scroll(scroll_id=scroll_id, scroll="2m")
             hits = scroll["hits"]["hits"]
+            if not hits:
+                break
             product_ids.extend([doc["_id"] for doc in hits])
 
     except Exception as e:
@@ -143,7 +145,7 @@ with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
     description='DAG to upload product_price data from Price service to Elasticsearch index',
-    start_date=datetime(2025, 5, 22, 0, 5, 0, 30),
+    start_date=datetime(2025, 5, 22, 0, 30),
     schedule="*/60 * * * *",
     catchup=False,
     tags=["nsi", "elasticsearch", "price"],
@@ -203,4 +205,7 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    [get_city, get_subdivision] >> get_product_ids >>  [transform_base_price >> load_base_price, transform_final_price >> load_final_price] >> cleanup_temp_files
+    [get_city, get_subdivision] >> get_product_ids >> [transform_base_price, transform_final_price]
+    transform_base_price >> load_base_price
+    transform_final_price >> load_final_price
+    [load_base_price, load_final_price] >> cleanup_temp_files

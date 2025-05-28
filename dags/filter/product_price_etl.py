@@ -116,10 +116,94 @@ def get_product_ids_callable(**context):
     context["ti"].xcom_push(key="product_ids_file_path", value=DATA_FILE_PATH)
 
 def get_city_callable(**context):
-    logging.info("get_city task done")
+    BASE_URL = "http://nsi.default"
+    DATA_FILE_PATH = f"/tmp/{DAG_ID}.city.json"
+
+    cities = []
+    page = 0
+    page_size = 1000
+
+    while True:
+        try:
+            response = requests.get(
+                f"{BASE_URL}/city",
+                params={
+                    "list_params.page": page,
+                    "list_params.page_size": page_size,
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", [])
+            if not results:
+                break
+            cities.extend([item for item in results if "id" in item])
+
+            page += 1
+        except Exception as e:
+            logging.error(f"Error during fetching warehouses: {e}")
+            break
+
+    cities_dict = {
+        c["id"]: c
+        for c in cities
+        if c.get("id")
+    }
+
+    try:
+        with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(cities_dict, f, ensure_ascii=False)
+    except IOError as e:
+        raise Exception(f"Task failed: couldn't save file to {DATA_FILE_PATH}") from e
+    
+    logging.info(f"city data are saved: {len(cities_dict)}")
+    context["ti"].xcom_push(key="cities_file_path", value=DATA_FILE_PATH)
 
 def get_subdivision_callable(**context):
-    logging.info("get_subdivision task done")
+    BASE_URL = "http://nsi.default"
+    DATA_FILE_PATH = f"/tmp/{DAG_ID}.subdivision.json"
+
+    subdivisions = []
+    page = 0
+    page_size = 1000
+
+    while True:
+        try:
+            response = requests.get(
+                f"{BASE_URL}/subdivision",
+                params={
+                    "list_params.page": page,
+                    "list_params.page_size": page_size,
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", [])
+            if not results:
+                break
+            subdivisions.extend([item for item in results if "id" in item])
+
+            page += 1
+        except Exception as e:
+            logging.error(f"Error during fetching warehouses: {e}")
+            break
+
+    subdivisions_dict = {
+        s["id"]: s
+        for s in subdivisions
+        if s.get("id")
+    }
+
+    try:
+        with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(subdivisions_dict, f, ensure_ascii=False)
+    except IOError as e:
+        raise Exception(f"Task failed: couldn't save file to {DATA_FILE_PATH}") from e
+    
+    logging.info(f"subdivision data are saved: {len(subdivisions_dict)}")
+    context["ti"].xcom_push(key="subdivisions_file_path", value=DATA_FILE_PATH)
 
 def transform_base_price_callable(**context):
     logging.info("transform_base_price task done")
@@ -136,6 +220,16 @@ def load_final_price_callable(**context):
 def cleanup_temp_files_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="product_ids_file_path", task_ids="get_product_ids_task"
+    )
+    clean_tmp_file(file_path)
+
+    file_path = context["ti"].xcom_pull(
+        key="cities_file_path", task_ids="get_city_task"
+    )
+    clean_tmp_file(file_path)
+
+    file_path = context["ti"].xcom_pull(
+        key="subdivisions_file_path", task_ids="get_subdivision_task"
     )
     clean_tmp_file(file_path)
 
@@ -205,7 +299,7 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    [get_city, get_subdivision] >> get_product_ids >> [transform_base_price, transform_final_price]
-    transform_base_price >> load_base_price
-    transform_final_price >> load_final_price
+    get_product_ids >> [get_city, get_subdivision]
+    get_city >> transform_base_price >> load_base_price
+    get_subdivision >> transform_final_price >> load_final_price
     [load_base_price, load_final_price] >> cleanup_temp_files

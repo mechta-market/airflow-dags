@@ -29,8 +29,25 @@ def fetch_data_callable(**context) -> None:
     context["ti"].xcom_push(key="fetched_data", value=response.get("data"))
 
 
-def fetch_data_from_subdivision_callable(**context):
+def normalize_data_callable(**context) -> None:
+    """Нормализация данных перед загрузкой в Elasticsearch."""
     items = context["ti"].xcom_pull(key="fetched_data", task_ids="fetch_data_task")
+    if not items:
+        return
+
+    normalized = []
+    for item in items:
+        if item.get("id") == ZERO_UUID:
+            continue
+        normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
+
+    context["ti"].xcom_push(key="normalized_data", value=normalized)
+
+
+def fetch_data_from_subdivision_callable(**context):
+    items = context["ti"].xcom_pull(
+        key="normalized_data", task_ids="normalize_data_task"
+    )
     if not items:
         return
 
@@ -53,30 +70,14 @@ def fetch_data_from_subdivision_callable(**context):
         if subdivision_id in subdivision_map:
             item["cb_node_id"] = subdivision_map[subdivision_id]
 
+    logging.info(items)
     context["ti"].xcom_push(key="fetched_data_from_subdivision", value=items)
-
-
-def normalize_data_callable(**context) -> None:
-    """Нормализация данных перед загрузкой в Elasticsearch."""
-    items = context["ti"].xcom_pull(
-        key="fetched_data_from_subdivision", task_ids="fetch_data_from_subdivision_task"
-    )
-    if not items:
-        return
-
-    normalized = []
-    for item in items:
-        if item.get("id") == ZERO_UUID:
-            continue
-        normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
-
-    context["ti"].xcom_push(key="normalized_data", value=normalized)
 
 
 def upsert_to_es_callable(**context):
     """Загружаем данные в Elasticsearch."""
     items = context["ti"].xcom_pull(
-        key="normalized_data", task_ids="normalize_data_task"
+        key="fetched_data_from_subdivision", task_ids="fetch_data_from_subdivision_task"
     )
     if not items:
         return
@@ -101,7 +102,7 @@ def upsert_to_es_callable(**context):
 def upsert_city_ids_in_warehouse_callable(**context):
     """Загружаем данные в Elasticsearch."""
     items = context["ti"].xcom_pull(
-        key="normalized_data", task_ids="normalize_data_task"
+        key="fetched_data_from_subdivision", task_ids="fetch_data_from_subdivision_task"
     )
     logging.info(f"Pulled items for upsert_city_ids_in_warehouse: {items}")
     if not items:
@@ -179,15 +180,15 @@ with DAG(
         provide_context=True,
     )
 
-    fetch_data_from_subdivision = PythonOperator(
-        task_id="fetch_data_from_subdivision_task",
-        python_callable=fetch_data_from_subdivision_callable,
-        provide_context=True,
-    )
-
     normalize_data = PythonOperator(
         task_id="normalize_data_task",
         python_callable=normalize_data_callable,
+        provide_context=True,
+    )
+
+    fetch_data_from_subdivision = PythonOperator(
+        task_id="fetch_data_from_subdivision_task",
+        python_callable=fetch_data_from_subdivision_callable,
         provide_context=True,
     )
 
@@ -205,7 +206,7 @@ with DAG(
 
     (
         fetch_data
-        >> fetch_data_from_subdivision
         >> normalize_data
+        >> fetch_data_from_subdivision
         >> [upsert_to_es, upsert_city_ids_in_warehouse]
     )

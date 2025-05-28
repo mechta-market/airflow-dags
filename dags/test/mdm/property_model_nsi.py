@@ -1,23 +1,20 @@
-import json
-import requests
+from datetime import datetime
+from helpers.utils import elastic_conn, request_to_nsi_api
 from datetime import datetime, timedelta
+
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
-from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
+
 
 DICTIONARY_NAME = "property_model"
 INDEX_NAME = f"{DICTIONARY_NAME}_nsi"
 
+
 def fetch_data_callable(**context):
     """Получаем данные из NSI и сохраняем в XCom."""
-    url = f"http://nsi.default/{DICTIONARY_NAME}"
-
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    payload = resp.json()
-    results = payload.get("results", [])
-    context["ti"].xcom_push(key="fetched_data", value=results)
+    resp = request_to_nsi_api(host=Variable.get("nsi_host"), endpoint={DICTIONARY_NAME})
+    context["ti"].xcom_push(key="fetched_data", value=resp.get("results", []))
 
 
 def upsert_to_es_callable(**context):
@@ -26,12 +23,7 @@ def upsert_to_es_callable(**context):
     if not items:
         return
 
-    hosts = ["http://mdm.default:9200"]
-    es_hook = ElasticsearchPythonHook(
-        hosts=hosts,
-        
-    )
-    client = es_hook.get_conn
+    client = elastic_conn()
 
     for item in items:
         doc_id = item.get("id")
@@ -47,14 +39,12 @@ def upsert_to_es_callable(**context):
 default_args = {
     "owner": "Amir",
     "depends_on_past": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
 }
 
 with DAG(
     dag_id=f"{DICTIONARY_NAME}_nsi",
     default_args=default_args,
-    schedule_interval="*/10 * * * *",
+    schedule_interval="50 */60 * * *",
     start_date=datetime(2025, 5, 14),
     catchup=False,
     tags=["nsi", "elasticsearch"],

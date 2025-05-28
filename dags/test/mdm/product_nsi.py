@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
-from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
+
 from airflow.utils.trigger_rule import TriggerRule
 
 from elasticsearch import helpers
@@ -79,11 +79,7 @@ def upsert_to_es_callable(**context):
         print("Data file not found.")
         return
 
-    hosts = ["http://mdm.default:9200"]
-    es_hook = ElasticsearchPythonHook(
-        hosts=hosts,
-    )
-    client = es_hook.get_conn
+    client = elastic_conn()
 
     with open(file_path, "r", encoding="utf-8") as f:
         items = json.load(f)

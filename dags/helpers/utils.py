@@ -1,5 +1,9 @@
 import logging
 import requests
+from typing import Any
+
+from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
+
 
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
@@ -30,3 +34,23 @@ def request_to_site_api(host: str, endpoint: str) -> dict:
         logging.error(f"ERROR_CODE: {response.status_code}")
         return
     return response.json()
+
+
+def request_to_nsi_api(host: str, endpoint: str) -> dict:
+    """Отправляет запрос к API NSI и возвращает ответ в виде словаря."""
+    url = f"{host}/{endpoint}"
+
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+    if not response.status_code < 300:
+        logging.error(f"ERROR_CODE: {response.status_code}")
+        return
+    return response.json()
+
+
+def elastic_conn() -> Any:
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    return es_hook.get_conn

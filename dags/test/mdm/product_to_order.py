@@ -1,15 +1,18 @@
 import logging
 from datetime import datetime
-from helpers.utils import request_to_1c, normalize_zero_uuid_fields, ZERO_UUID
+from helpers.utils import (
+    elastic_conn,
+    request_to_1c,
+    normalize_zero_uuid_fields,
+    ZERO_UUID,
+)
 
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
-from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 
-DICTIONARY_NAME = "organisation"
-INDEX_NAME = f"{DICTIONARY_NAME}_1c"
+DICTIONARY_NAME = "product_to_order"
 NORMALIZE_FIELDS = []
 
 
@@ -33,8 +36,9 @@ def normalize_data_callable(**context) -> None:
 
     normalized = []
     for item in items:
-        if item.get("id") == ZERO_UUID:
+        if item.get("product_id") == ZERO_UUID or not item.get("value"):
             continue
+        item["id"] = item["id"].strip()
         normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
 
     context["ti"].xcom_push(key="normalized_data", value=normalized)
@@ -48,18 +52,14 @@ def upsert_to_es_callable(**context):
     if not items:
         return
 
-    hosts = ["http://mdm.default:9200"]
-    es_hook = ElasticsearchPythonHook(
-        hosts=hosts,
-    )
-    client = es_hook.get_conn
+    client = elastic_conn()
 
     for item in items:
         doc_id = item.get("id")
         if not doc_id:
             continue
         client.update(
-            index=INDEX_NAME,
+            index=DICTIONARY_NAME,
             id=doc_id,
             body={"doc": item, "doc_as_upsert": True},
         )
@@ -68,14 +68,12 @@ def upsert_to_es_callable(**context):
 default_args = {
     "owner": "Amir",
     "depends_on_past": False,
-    # "retries": 1,
-    # "retry_delay": timedelta(minutes=5),
 }
 
 with DAG(
-    dag_id=f"{DICTIONARY_NAME}_1c",
+    dag_id=f"{DICTIONARY_NAME}",
     default_args=default_args,
-    schedule_interval="*/60 * * * *",
+    schedule_interval="*30 */60 * * *",
     start_date=datetime(2025, 5, 14),
     catchup=False,
     tags=["1c", "elasticsearch"],

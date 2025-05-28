@@ -109,7 +109,7 @@ def delete_previous_data_callable(**context):
         logging.error(f"Failed to fetch existing IDs from Elasticsearch: {e}")
         return
     
-    ids_to_delete = existing_ids - incoming_ids
+    ids_to_delete = existing_ids - set(incoming_ids)
     
     for doc_id in ids_to_delete:
         client.update(

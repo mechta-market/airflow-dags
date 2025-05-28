@@ -439,21 +439,21 @@ def transform_final_price_callable(**context):
                 executor.submit(process_single_product, pid): pid for pid in batch
             }
             for future in as_completed(futures):
-                product_id, base_prices = future.result()
-                if base_prices:
-                    product_base_price_dict[product_id] = base_prices
+                product_id, final_prices = future.result()
+                if final_prices:
+                    product_base_price_dict[product_id] = final_prices
 
     # save
 
-    DATA_FILE_PATH = f"/tmp/{DAG_ID}.product_base_price.json"
+    DATA_FILE_PATH = f"/tmp/{DAG_ID}.product_final_price.json"
     try:
         with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
             json.dump(dict(product_base_price_dict), f, ensure_ascii=False)
     except IOError as e:
         raise Exception(f"Task failed: couldn't save file to {DATA_FILE_PATH}") from e
     
-    logging.info(f"product_base_price data are saved: {len(product_base_price_dict)}")
-    context["ti"].xcom_push(key="product_base_price_file_path", value=DATA_FILE_PATH)
+    logging.info(f"product_final_price data are saved: {len(product_base_price_dict)}")
+    context["ti"].xcom_push(key="product_final_price_file_path", value=DATA_FILE_PATH)
 
 def load_base_price_callable(**context):
     file_path = context["ti"].xcom_pull(

@@ -233,7 +233,7 @@ def extract_data_callable(**context):
             )
             return [item["id"] for item in data.get("results", []) if "id" in item]
         except Exception as e:
-            logging.error(f"Ошибка при получении страницы {page}: {e}")
+            logging.error(f"Error in processing page {page}: {e}")
             return []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:

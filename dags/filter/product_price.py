@@ -165,6 +165,7 @@ def get_subdivision_callable(**context):
             params={
                 "list_params.page": page,
                 "list_params.page_size": page_size,
+                "is_shop": True,
             },
             timeout=10,
         )

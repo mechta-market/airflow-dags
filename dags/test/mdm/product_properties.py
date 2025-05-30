@@ -298,12 +298,6 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    delete_different_data = PythonOperator(
-        task_id="delete_different_data_task",
-        python_callable=delete_different_data_callable,
-        provide_context=True,
-    )
-
     load_data = PythonOperator(
         task_id="load_data_task",
         python_callable=load_data_callable,

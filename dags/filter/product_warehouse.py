@@ -1,3 +1,4 @@
+import json
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -186,76 +187,98 @@ def get_city_warehouse_callable(**context):
 
 
 def transform_data_callable(**context):
-    product_ids = load_data_from_tmp_file(context,
-        xcom_key="product_ids_file_path",
-        task_id="get_product_ids_task",
-    )
-    warehouses_dict = load_data_from_tmp_file(context,
-        xcom_key="warehouses_file_path",
-        task_id="get_warehouse_task",
-    )
-    warehouse_cities_dict = load_data_from_tmp_file(context,
-        xcom_key="warehouse_cities_file_path",
-        task_id="get_city_warehouse_task",
+    product_ids = []
+    warehouses_dict = {}
+    warehouse_cities_dict = {}
+
+    product_ids_file_path = context["ti"].xcom_pull(
+        key="product_ids_file_path", task_ids="get_product_ids_task"
     )
 
-    BASE_URL = Variable.get("store_host")
+    if not product_ids_file_path or not os.path.exists(product_ids_file_path):
+        raise FileNotFoundError(f"File not found: {product_ids_file_path}")
 
+    with open(product_ids_file_path, "r", encoding="utf-8") as f:
+        product_ids = json.load(f)
+
+    warehouses_file_path = context["ti"].xcom_pull(
+        key="warehouses_file_path", task_ids="get_warehouse_task"
+    )
+
+    if not warehouses_file_path or not os.path.exists(warehouses_file_path):
+        raise FileNotFoundError(f"File not found: {warehouses_file_path}")
+
+    with open(warehouses_file_path, "r", encoding="utf-8") as f:
+        warehouses_dict = json.load(f)
+
+    warehouse_cities_file_path = context["ti"].xcom_pull(
+        key="warehouse_cities_file_path", task_ids="get_city_warehouse_task"
+    )
+
+    if not warehouse_cities_file_path or not os.path.exists(warehouse_cities_file_path):
+        raise FileNotFoundError(f"File not found: {warehouse_cities_file_path}")
+
+    with open(warehouse_cities_file_path, "r", encoding="utf-8") as f:
+        warehouse_cities_dict = json.load(f)
+
+    # do
+
+    MAX_WORKERS = 5
+    BATCH_SIZE = 100
+    BASE_URL = "http://store.default"
 
     product_warehouse_dict: Dict[str, List[Dict[str, Any]]] = {}
 
-    def process_product_warehouse(product_id: str) -> (str, List[Dict[str, Any]]):
-        response = requests.get(
-            f"{BASE_URL}/product_warehouse",
-            params={
-                "list_params.page_size": 1000,
-                "product_id": product_id,
-                "has_real_value": True,
-            },
-            timeout=60,
-        )
-        response.raise_for_status()
-        data = response.json()
+    def process_single_product(product_id: str) -> (str, List[Dict[str, Any]]):
+        try:
+            response = requests.get(
+                f"{BASE_URL}/product_warehouse",
+                params={
+                    "list_params.page_size": 1000,
+                    "product_id": product_id,
+                    "has_real_value": True,
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as e:
+            logging.warning(f"Failed to fetch warehouse data for product_id={product_id}: {e}")
+            return product_id, []
+        
         results = data.get("results", [])
         if not results:
             return product_id, []
         
-        raw_list = [item for item in results if "warehouse_id" in item and "real_value" in item]
+        raw_list = [item for item in results if "warehouse_id" in item]
         documents = []
-
         for raw in raw_list:
-            warehouse_id = raw.get("warehouse_id", "")
+            warehouse_id = raw["warehouse_id"]
             doc = DocumentWarehouse(
                 id=warehouse_id,
                 classification=warehouses_dict.get(warehouse_id, {}).get("classification", ""),
                 city_ids=warehouse_cities_dict.get(warehouse_id, []),
-                real_value=raw.get("real_value", 0)
+                real_value=raw["real_value"]
             )
             documents.append(doc.to_dict())
 
         return product_id, documents
 
-    MAX_WORKERS = 5
-    BATCH_SIZE = 100
-
     for i in range(0, len(product_ids), BATCH_SIZE):
         batch = product_ids[i:i + BATCH_SIZE]
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = { executor.submit(process_product_warehouse, p_id): p_id for p_id in batch }
+            futures = {executor.submit(process_single_product, pid): pid for pid in batch}
             for future in as_completed(futures):
-                try:
-                    product_id, docs = future.result()
-                    product_warehouse_dict[product_id] = docs # обнулять остатки, если их действительно нет
-                except Exception as e:
-                    logging.error(f"error during processing product_warehouse product_id: {product_id}, error: {e}")
-                    raise
+                product_id, docs = future.result()
+                if docs:
+                    product_warehouse_dict[product_id] = docs
 
     save_data_to_tmp_file(context=context,
-        xcom_key="product_warehouses_file_path",
-        data=warehouses_dict,
-        file_path=f"/tmp/{DAG_ID}.product_warehouses.json"
+        xcom_key="product_warehouse_file_path",
+        data=dict(product_warehouse_dict),
+        file_path=f"/tmp/{DAG_ID}.product_warehouses.json",
     )
-    logging.info(f"transformed product_warehouses count: {len(warehouses_dict)}")
+    logging.info(f"transformed products count: {len(product_warehouse_dict)}")
 
 
 def load_data_callable(**context):

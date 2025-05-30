@@ -1,5 +1,3 @@
-import os
-import json
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -12,7 +10,6 @@ from elasticsearch.helpers import BulkIndexError
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
-from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 from airflow.utils.trigger_rule import TriggerRule
 
 from filter.utils import (
@@ -28,8 +25,8 @@ DAG_ID="product_warehouse"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    # "retries": 1,
-    # "retry_delay": timedelta(minutes=5),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=2),
 }
 
 # Constants
@@ -229,11 +226,16 @@ def transform_data_callable(**context):
         documents = []
         for raw in raw_list:
             warehouse_id = raw.get("warehouse_id", "")
+            real_value = raw.get("real_value", 0)
+
+            if not warehouse_id or not real_value:
+                continue
+
             doc = DocumentWarehouse(
                 id=warehouse_id,
                 classification=warehouses_dict.get(warehouse_id, {}).get("classification", ""),
                 city_ids=warehouse_cities_dict.get(warehouse_id, []),
-                real_value=raw.get("real_value", 0)
+                real_value=real_value
             )
             documents.append(doc.to_dict())
 
@@ -286,7 +288,8 @@ def load_data_callable(**context):
         if errors:
             logging.error(f"Errors encountered during bulk update: {errors}")
     except BulkIndexError as bulk_error:
-        raise Exception(f"Bulk update failed: {bulk_error}") 
+        logging.error(f"Bulk update failed: {bulk_error}")
+        raise
 
 
 def cleanup_temp_files_callable(**context):

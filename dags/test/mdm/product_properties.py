@@ -27,7 +27,7 @@ default_args = {
 
 # Constants
 
-INDEX_NAME = "product_v1"
+INDEX_NAME = "product_test_v1"
 
 DEFAULT_LANGUAGE = "ru"
 TARGET_LANGUAGES = ["ru", "kz"]
@@ -163,16 +163,18 @@ def extract_data_callable(**context):
             )
             return None
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [
-            executor.submit(fetch_product_details, pid) for pid in nsi_product_ids
-        ]
+    # with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    #     futures = [
+    #         executor.submit(fetch_product_details, pid) for pid in nsi_product_ids
+    #     ]
 
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                collected_products.append(result)
+    #     for future in as_completed(futures):
+    #         result = future.result()
+    #         if result:
+    #             collected_products.append(result)
 
+    product = fetch_product_details(nsi_product_ids[0])
+    collected_products = [product]
     # Save products data
 
     try:
@@ -221,72 +223,6 @@ def transform_data_callable(**context):
     )
 
 
-def delete_different_data_callable(**context):
-    file_path = context["ti"].xcom_pull(
-        key="transform_data_file_path", task_ids="transform_data_task"
-    )
-
-    if not file_path or not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        transformed_products = json.load(f)
-
-    hosts = ["http://mdm.default:9200"]
-    es_hook = ElasticsearchPythonHook(
-        hosts=hosts,
-    )
-    client = es_hook.get_conn
-
-    existing_ids_query = {
-        "query": {"match_all": {}},
-        "_source": False,
-        "fields": ["_id"],
-    }
-
-    try:
-        response = client.search(
-            index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m"
-        )
-        scroll_id = response["_scroll_id"]
-        existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
-
-        while len(response["hits"]["hits"]) > 0:
-            response = client.scroll(scroll_id=scroll_id, scroll="2m")
-            existing_ids.update(hit["_id"] for hit in response["hits"]["hits"])
-
-    except Exception as e:
-        logging.error(f"Failed to fetch existing IDs from Elasticsearch: {e}")
-        return
-
-    incoming_ids = {
-        product.get("id") for product in transformed_products if product.get("id")
-    }
-    ids_to_delete = existing_ids - incoming_ids
-
-    delete_actions = [
-        {
-            "_op_type": "delete",
-            "_index": INDEX_NAME,
-            "_id": product_id,
-        }
-        for product_id in ids_to_delete
-    ]
-
-    if delete_actions:
-        try:
-            success, errors = helpers.bulk(
-                client, delete_actions, refresh="wait_for", stats_only=False
-            )
-            logging.info(f"Successfully deleted {success} documents.")
-            if errors:
-                logging.error(f"Errors encountered during bulk delete: {errors}")
-        except BulkIndexError as bulk_error:
-            raise Exception(f"Bulk delete failed: {bulk_error}")
-
-    logging.info(f"Products are deleted: {len(ids_to_delete)}")
-
-
 def load_data_callable(**context):
     file_path = context["ti"].xcom_pull(
         key="transform_data_file_path", task_ids="transform_data_task"
@@ -310,7 +246,6 @@ def load_data_callable(**context):
             "_index": INDEX_NAME,
             "_id": product.get("id"),
             "doc": product,
-            "doc_as_upsert": True,
         }
         for product in transformed_products
         if product.get("id")
@@ -327,16 +262,16 @@ def load_data_callable(**context):
         raise Exception(f"Bulk update failed: {bulk_error}")
 
 
-def cleanup_temp_files_callable(**context):
-    file_path = context["ti"].xcom_pull(
-        key="extract_data_file_path", task_ids="extract_data_task"
-    )
-    clean_tmp_file(file_path)
+# def cleanup_temp_files_callable(**context):
+#     file_path = context["ti"].xcom_pull(
+#         key="extract_data_file_path", task_ids="extract_data_task"
+#     )
+#     clean_tmp_file(file_path)
 
-    file_path = context["ti"].xcom_pull(
-        key="transform_data_file_path", task_ids="transform_data_task"
-    )
-    clean_tmp_file(file_path)
+#     file_path = context["ti"].xcom_pull(
+#         key="transform_data_file_path", task_ids="transform_data_task"
+#     )
+#     clean_tmp_file(file_path)
 
 
 # Dag
@@ -367,24 +302,19 @@ with DAG(
         task_id="delete_different_data_task",
         python_callable=delete_different_data_callable,
         provide_context=True,
-        trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     load_data = PythonOperator(
         task_id="load_data_task",
         python_callable=load_data_callable,
         provide_context=True,
-        trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    cleanup_temp_files = PythonOperator(
-        task_id="cleanup_temp_files_task",
-        python_callable=cleanup_temp_files_callable,
-        provide_context=True,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
+    # cleanup_temp_files = PythonOperator(
+    #     task_id="cleanup_temp_files_task",
+    #     python_callable=cleanup_temp_files_callable,
+    #     provide_context=True,
+    #     trigger_rule=TriggerRule.ALL_DONE,
+    # )
 
-    (
-        extract_data
-        >> transform_data
-    )
+    (extract_data >> transform_data)

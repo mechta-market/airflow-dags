@@ -25,13 +25,13 @@ DAG_ID = "product"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    # "retries": 1,
-    # "retry_delay": timedelta(minutes=5),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=5),
 }
 
 # Constants
 
-INDEX_NAME = "product_test_properties"
+INDEX_NAME = "product_v1"
 
 DEFAULT_LANGUAGE = "ru"
 TARGET_LANGUAGES = ["ru", "kz"]
@@ -267,8 +267,7 @@ class DocumentProduct:
                 }
             )
 
-        transformed = {"all_properties": result_groups}
-        logging.info("Transformed properties for product: %s", transformed)
+        transformed = {"groups": result_groups}
         return transformed
 
 
@@ -348,12 +347,9 @@ def extract_data_callable(**context):
 
     extracted_products: List[dict] = []
 
-    # TEST
-    product_ids_test = [product_ids[0], product_ids[1], product_ids[2]]
-
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [
-            executor.submit(fetch_product_details, id) for id in product_ids_test
+            executor.submit(fetch_product_details, id) for id in product_ids
         ]
         for f in as_completed(futures):
             try:

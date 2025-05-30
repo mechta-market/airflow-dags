@@ -228,12 +228,12 @@ def transform_data_callable(**context):
         raw_list = [item for item in results if "warehouse_id" in item]
         documents = []
         for raw in raw_list:
-            warehouse_id = raw.get("warehouse_id")
+            warehouse_id = raw.get("warehouse_id", "")
             doc = DocumentWarehouse(
                 id=warehouse_id,
                 classification=warehouses_dict.get(warehouse_id, {}).get("classification", ""),
                 city_ids=warehouse_cities_dict.get(warehouse_id, []),
-                real_value=raw.get("real_value")
+                real_value=raw.get("real_value", 0)
             )
             documents.append(doc.to_dict())
 

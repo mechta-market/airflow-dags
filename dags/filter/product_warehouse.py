@@ -7,10 +7,12 @@ from typing import Any, Dict, List
 import requests
 
 from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
 
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
+from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 from airflow.utils.trigger_rule import TriggerRule
 
 from filter.utils import (
@@ -275,7 +277,7 @@ def transform_data_callable(**context):
                     product_warehouse_dict[product_id] = docs
 
     save_data_to_tmp_file(context=context,
-        xcom_key="product_warehouse_file_path",
+        xcom_key="product_warehouses_file_path",
         data=dict(product_warehouse_dict),
         file_path=f"/tmp/{DAG_ID}.product_warehouses.json",
     )
@@ -283,15 +285,23 @@ def transform_data_callable(**context):
 
 
 def load_data_callable(**context):
-    product_warehouses_dict = load_data_from_tmp_file(context,
-        xcom_key="product_warehouses_file_path",
-        task_id="transform_data_task",
+    file_path = context["ti"].xcom_pull(
+        key="product_warehouses_file_path", task_ids="transform_data_task"
     )
 
-    client = elastic_conn(Variable.get("elastic_scheme"))
+    if not file_path or not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
 
-    actions: Dict[str, dict] = []
+    with open(file_path, "r", encoding="utf-8") as f:
+        product_warehouses_dict = json.load(f)
+    
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(
+        hosts=hosts,
+    )
+    client = es_hook.get_conn
 
+    actions = []
     for product_id, warehouses in product_warehouses_dict.items():
         actions.append({
             "_op_type": "update",
@@ -300,19 +310,17 @@ def load_data_callable(**context):
             "doc": { 
                 "warehouses": warehouses 
             },
-            "retry_on_conflict": 3
         })
 
     try:
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        logging.info(f"update success, updated documents count: {success}")
+        logging.info(f"Successfully updated {success} documents.")
         if errors:
-            logging.error(f"error during bulk update: {errors}")
-    except Exception as bulk_error:
-        logging.error(f"bulk update failed, error: {bulk_error}")
-        raise
+            logging.error(f"Errors encountered during bulk update: {errors}")
+    except BulkIndexError as bulk_error:
+        raise Exception(f"Bulk update failed: {bulk_error}") 
 
 
 def cleanup_temp_files_callable(**context):

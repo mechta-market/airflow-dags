@@ -31,7 +31,7 @@ default_args = {
 
 # Constants
 
-INDEX_NAME = "product_v1"
+INDEX_NAME = "product_test_properties"
 
 DEFAULT_LANGUAGE = "ru"
 TARGET_LANGUAGES = ["ru", "kz"]

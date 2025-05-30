@@ -12,16 +12,16 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
 from filter.utils import (
-    fetch_with_retry, 
-    clean_tmp_file, 
-    load_data_from_tmp_file, 
-    save_data_to_tmp_file
+    fetch_with_retry,
+    clean_tmp_file,
+    load_data_from_tmp_file,
+    save_data_to_tmp_file,
 )
 from helpers.utils import elastic_conn
 
 # DAG parameters
 
-DAG_ID="product"
+DAG_ID = "product"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
@@ -42,6 +42,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Functions
 
+
 class DocumentProduct:
     def __init__(self, p: dict):
         self.id = p.get("id", "")
@@ -56,8 +57,12 @@ class DocumentProduct:
         self.group_id = p.get("group_id", "")
         self.published = p.get("published", False)
         self.kbt = p.get("kbt", False)
-        self.not_available_for_offline_sell = p.get("not_available_for_offline_sell", False)
-        self.not_available_for_online_sell = p.get("not_available_for_online_sell", False)
+        self.not_available_for_offline_sell = p.get(
+            "not_available_for_offline_sell", False
+        )
+        self.not_available_for_online_sell = p.get(
+            "not_available_for_online_sell", False
+        )
         self.imei_track = p.get("imei_track", False)
 
         self.name_i18n = self._parse_i18n(p.get("name_i18n", {}))
@@ -69,21 +74,24 @@ class DocumentProduct:
         self.pre_order = self._parse_preorder(p.get("pre_order", None))
 
         self.properties = self._parse_properties(p.get("property_model", {}))
+        self.all_properties = self._parse_all_properties(p.get("property_model", {}))
 
     def _parse_i18n(self, field_i18n) -> dict:
-        return { lang: field_i18n.get(lang, "") for lang in TARGET_LANGUAGES }
+        return {lang: field_i18n.get(lang, "") for lang in TARGET_LANGUAGES}
 
     def _parse_categories(self, breadcrumbs) -> List[dict]:
         categories = []
         for cat in breadcrumbs:
             if not cat.get("id"):
                 continue
-            categories.append({
-                "id": cat.get("id", ""),
-                "slug": cat.get("slug", ""),
-                "depth": cat.get("depth", 0),
-                "name_i18n": self._parse_i18n(cat.get("name_i18n", {}))
-            })
+            categories.append(
+                {
+                    "id": cat.get("id", ""),
+                    "slug": cat.get("slug", ""),
+                    "depth": cat.get("depth", 0),
+                    "name_i18n": self._parse_i18n(cat.get("name_i18n", {})),
+                }
+            )
         return categories
 
     def _parse_preorder(self, pre_order) -> dict:
@@ -125,7 +133,7 @@ class DocumentProduct:
                 for i, v_slug in enumerate(slugs):
                     if not v_slug:
                         continue
-                    
+
                     p = {
                         "name_slug": attr.get("slug"),
                         "name": {},
@@ -176,15 +184,106 @@ class DocumentProduct:
                     properties.append(p)
         return properties
 
+    def _parse_all_properties(self, property_model: dict) -> List[Dict[str, Any]]:
+        groups = property_model.get("groups") or []
+        result_groups: List[Dict[str, Any]] = []
+
+        for group in groups:
+            attributes: List[Dict[str, Any]] = []
+            for attribute in group.get("attributes") or []:
+                data = attribute.get("data") or {}
+                opts = data.get("options") or []
+                m_unit_i18n = data.get("m_unit_i18n") or {}
+
+                # Строим fast lookup для меток
+                label_map = {
+                    opt.get("label", ""): {
+                        "label_i18n": opt.get("label_i18n", {}),
+                        "m_unit_i18n": m_unit_i18n,
+                    }
+                    for opt in opts
+                    if isinstance(opt, dict)
+                }
+
+                value = attribute.get("value") or {}
+                slugs = value.get("slugs") or []
+                vals_i18n = value.get("values_i18n") or []
+                attr_type = attribute.get("type")
+
+                # Собираем values
+                values: List[Dict[str, Any]] = []
+                for slug, v_i18n in zip(slugs, vals_i18n):
+                    ru_label = v_i18n.get("ru", "")
+                    opt_info = label_map.get(ru_label, {})
+                    label_i18n = opt_info.get("label_i18n") or v_i18n
+
+                    # Если числовой тип, добавляем единицу измерения в каждую языковую версию
+                    if attr_type == "number" and m_unit_i18n:
+                        combined = {}
+                        for lang, text in label_i18n.items():
+                            if lang == "ru":
+                                t = text
+                            unit = m_unit_i18n.get(lang, "")
+                            combined[lang] = f"{t} {unit}".strip()
+                        label_i18n = combined
+
+                    # Если boolean тип, меняем значения на Да/Нет
+                    if attr_type == "boolean":
+                        if ru_label == "true":
+                            label_i18n = {
+                                "kz": "Иә",
+                                "ru": "Да",
+                            }
+                        if ru_label == "false":
+                            label_i18n = {
+                                "kz": "Жоқ",
+                                "ru": "Нет",
+                            }
+                    values.append(
+                        {
+                            "slug": slug,
+                            "label_i18n": label_i18n,
+                        }
+                    )
+
+                attributes.append(
+                    {
+                        "id": attribute.get("id"),
+                        "name_i18n": attribute.get("name_i18n") or {},
+                        "type": attr_type,
+                        "ord": attribute.get("ord"),
+                        "flags": attribute.get("flags") or {},
+                        "slug": attribute.get("slug"),
+                        "values": values,
+                    }
+                )
+
+            result_groups.append(
+                {
+                    "id": group.get("id"),
+                    "name_i18n": group.get("name_i18n") or {},
+                    "ord": group.get("ord"),
+                    "flags": group.get("flags") or {},
+                    "attributes": attributes,
+                }
+            )
+
+        transformed = {"all_properties": result_groups}
+        logging.info("Transformed properties for product: %s", transformed)
+        return transformed
+
+
 def encode_document_product(p: dict) -> dict:
     dp = DocumentProduct(p)
     return dp.__dict__
 
+
 # Tasks
+
 
 def extract_data_callable(**context):
     BASE_URL = Variable.get("nsi_host")
-    
+
     MAX_WORKERS = 7
     PAGE_SIZE = 1000
 
@@ -199,7 +298,9 @@ def extract_data_callable(**context):
                 timeout=10,
             )
             response.raise_for_status()
-            total_count = int(response.json().get("pagination_info", {}).get("total_count", 0))
+            total_count = int(
+                response.json().get("pagination_info", {}).get("total_count", 0)
+            )
             return (total_count + PAGE_SIZE - 1) // PAGE_SIZE
         except requests.RequestException as e:
             logging.error(f"Failed to fetch total pages: {e}")
@@ -214,7 +315,9 @@ def extract_data_callable(**context):
                 "archived": False,
             },
         )
-        return [product["id"] for product in response.get("results", []) if "id" in product]
+        return [
+            product["id"] for product in response.get("results", []) if "id" in product
+        ]
 
     def fetch_product_details(id: str) -> dict:
         url = f"{BASE_URL}/product/{id}"
@@ -232,7 +335,9 @@ def extract_data_callable(**context):
     product_ids: List[str] = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = { executor.submit(fetch_page, page): page for page in range(total_pages) }
+        futures = {
+            executor.submit(fetch_page, page): page for page in range(total_pages)
+        }
         for f in as_completed(futures):
             page = futures[f]
             try:
@@ -245,7 +350,7 @@ def extract_data_callable(**context):
     extracted_products: List[dict] = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [ executor.submit(fetch_product_details, id) for id in product_ids ]
+        futures = [executor.submit(fetch_product_details, id) for id in product_ids]
         for f in as_completed(futures):
             try:
                 result = f.result()
@@ -255,7 +360,8 @@ def extract_data_callable(**context):
                 logging.error(f"error in processing product details: {e}")
                 raise
 
-    save_data_to_tmp_file(context=context,
+    save_data_to_tmp_file(
+        context=context,
         xcom_key="extract_data_file_path",
         data=extracted_products,
         file_path=f"/tmp/{DAG_ID}.extract_data.json",
@@ -266,7 +372,8 @@ def extract_data_callable(**context):
 def transform_data_callable(**context):
     MAX_WORKERS = 7
 
-    collected_products: List[dict] = load_data_from_tmp_file(context=context, 
+    collected_products: List[dict] = load_data_from_tmp_file(
+        context=context,
         xcom_key="extract_data_file_path",
         task_id="extract_data_task",
     )
@@ -274,7 +381,9 @@ def transform_data_callable(**context):
     transformed_products: List[dict] = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [ executor.submit(encode_document_product, p) for p in collected_products ]
+        futures = [
+            executor.submit(encode_document_product, p) for p in collected_products
+        ]
         for future in as_completed(futures):
             try:
                 transformed_products.append(future.result())
@@ -282,7 +391,8 @@ def transform_data_callable(**context):
                 logging.error(f"Failed to process product: {e}")
                 raise
 
-    save_data_to_tmp_file(context=context,
+    save_data_to_tmp_file(
+        context=context,
         xcom_key="transform_data_file_path",
         data=transformed_products,
         file_path=f"/tmp/{DAG_ID}.transform_data.json",
@@ -291,22 +401,27 @@ def transform_data_callable(**context):
 
 
 def delete_different_data_callable(**context):
-    transformed_products: List[dict] = load_data_from_tmp_file(context=context, 
+    transformed_products: List[dict] = load_data_from_tmp_file(
+        context=context,
         xcom_key="transform_data_file_path",
         task_id="transform_data_task",
     )
-    transformed_product_ids = {product.get("id") for product in transformed_products if product.get("id")}
+    transformed_product_ids = {
+        product.get("id") for product in transformed_products if product.get("id")
+    }
 
     client = elastic_conn(Variable.get("elastic_scheme"))
 
     existing_ids_query = {
         "_source": False,
         "fields": ["_id"],
-        "query": { "match_all": {} }
+        "query": {"match_all": {}},
     }
 
     try:
-        response = client.search(index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m")
+        response = client.search(
+            index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m"
+        )
         scroll_id = response["_scroll_id"]
         existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
         while len(response["hits"]["hits"]) > 0:
@@ -344,11 +459,12 @@ def delete_different_data_callable(**context):
 
 
 def load_data_callable(**context):
-    transformed_products = load_data_from_tmp_file(context,
+    transformed_products = load_data_from_tmp_file(
+        context,
         xcom_key="transform_data_file_path",
         task_id="transform_data_task",
     )
-    
+
     client = elastic_conn(Variable.get("elastic_scheme"))
 
     actions = [
@@ -358,7 +474,7 @@ def load_data_callable(**context):
             "_id": product.get("id"),
             "doc": product,
             "doc_as_upsert": True,
-            "retry_on_conflict": 3
+            "retry_on_conflict": 3,
         }
         for product in transformed_products
         if product.get("id")
@@ -376,7 +492,7 @@ def load_data_callable(**context):
         raise
 
 
-def cleanup_temp_files_callable(**context):    
+def cleanup_temp_files_callable(**context):
     tmp_file_keys = [
         {"xcom_key": "extract_data_file_path", "task_id": "extract_data_task"},
         {"xcom_key": "transform_data_file_path", "task_id": "transform_data_task"},
@@ -393,7 +509,7 @@ def cleanup_temp_files_callable(**context):
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    description='DAG to upload products from NSI service to Elasticsearch index',
+    description="DAG to upload products from NSI service to Elasticsearch index",
     start_date=datetime(2025, 5, 22),
     schedule="0 * * * *",
     max_active_runs=1,
@@ -426,7 +542,7 @@ with DAG(
         provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
-    
+
     cleanup_temp_files = PythonOperator(
         task_id="cleanup_temp_files_task",
         python_callable=cleanup_temp_files_callable,
@@ -434,4 +550,10 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    extract_data >> transform_data >> delete_different_data >> load_data >> cleanup_temp_files
+    (
+        extract_data
+        >> transform_data
+        >> delete_different_data
+        >> load_data
+        >> cleanup_temp_files
+    )

@@ -30,6 +30,6 @@ def clean_tmp_file(file_path: str):
 
     if os.path.exists(file_path):
         os.remove(file_path)
-        logging.info(f"Temporary file removed: {file_path}")
+        logging.info(f"clean_tmp_file: file removed: {file_path}")
     else:
-        logging.info(f"File does not exist: {file_path}")
+        logging.info(f"clean_tmp_file: file not found: {file_path}")

@@ -205,27 +205,22 @@ def transform_data_callable(**context):
 
     MAX_WORKERS = 5
     BATCH_SIZE = 100
-    BASE_URL = "http://store.default"
+    BASE_URL = Variable.get("store_host")
 
     product_warehouse_dict: Dict[str, List[Dict[str, Any]]] = {}
 
     def process_product_warehouse(product_id: str) -> (str, List[Dict[str, Any]]):
-        try:
-            response = requests.get(
-                f"{BASE_URL}/product_warehouse",
-                params={
-                    "list_params.page_size": 1000,
-                    "product_id": product_id,
-                    "has_real_value": True,
-                },
-                timeout=60,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except requests.RequestException as e:
-            logging.warning(f"Failed to fetch warehouse data for product_id={product_id}: {e}")
-            return product_id, []
-        
+        response = requests.get(
+            f"{BASE_URL}/product_warehouse",
+            params={
+                "list_params.page_size": 1000,
+                "product_id": product_id,
+                "has_real_value": True,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        data = response.json()
         results = data.get("results", [])
         if not results:
             return product_id, []
@@ -233,12 +228,12 @@ def transform_data_callable(**context):
         raw_list = [item for item in results if "warehouse_id" in item]
         documents = []
         for raw in raw_list:
-            warehouse_id = raw["warehouse_id"]
+            warehouse_id = raw.get("warehouse_id")
             doc = DocumentWarehouse(
                 id=warehouse_id,
                 classification=warehouses_dict.get(warehouse_id, {}).get("classification", ""),
                 city_ids=warehouse_cities_dict.get(warehouse_id, []),
-                real_value=raw["real_value"]
+                real_value=raw.get("real_value")
             )
             documents.append(doc.to_dict())
 
@@ -249,16 +244,19 @@ def transform_data_callable(**context):
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {executor.submit(process_product_warehouse, pid): pid for pid in batch}
             for future in as_completed(futures):
-                product_id, docs = future.result()
-                if docs:
+                try:
+                    product_id, docs = future.result()
                     product_warehouse_dict[product_id] = docs
+                except Exception as e:
+                    logging.error(f"failed to process product: {e}")
+                    raise
 
     save_data_to_tmp_file(context=context,
         xcom_key="product_warehouses_file_path",
         data=dict(product_warehouse_dict),
         file_path=f"/tmp/{DAG_ID}.product_warehouses.json",
     )
-    logging.info(f"transformed products count: {len(product_warehouse_dict)}")
+    logging.info(f"transformed product_warehouses count: {len(product_warehouse_dict)}")
 
 
 def load_data_callable(**context):

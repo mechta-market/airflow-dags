@@ -214,36 +214,30 @@ def transform_base_price_callable(**context):
 
     product_base_price_dict: Dict[str, List[Dict[str, Any]]] = {}
 
-    def process_single_product(product_id: str) -> (str, List[Dict[str, Any]]):
+    def process_product_base_price(product_id: str) -> (str, List[Dict[str, Any]]):
         base_price = {}
         spec_base_prices = []
 
-        try:
-            response = requests.get(
-                f"{BASE_URL}/base_price/{product_id}",
-                timeout=10,
-            )
-            response.raise_for_status()
-            base_price = response.json()
-        except requests.RequestException as e:
-            logging.warning(f"Failed to fetch base_price for product_id={product_id}: {e}")
-            return product_id, []
+        # 1
+        response = requests.get(
+            f"{BASE_URL}/base_price/{product_id}",
+            timeout=10,
+        )
+        response.raise_for_status()
+        base_price = response.json()
 
-        try:
-            response = requests.get(
-                f"{BASE_URL}/spec_base_price",
-                params={
-                    "list_params.page_size": 1000,
-                    "product_id": product_id,
-                },
-                timeout=60,
-            )
-            response.raise_for_status()
-            data = response.json()
-            spec_base_prices = data.get("results", [])
-        except requests.RequestException as e:
-            logging.warning(f"Failed to fetch warehouse data for product_id={product_id}: {e}")
-            return product_id, []
+        # 2
+        response = requests.get(
+            f"{BASE_URL}/spec_base_price",
+            params={
+                "list_params.page_size": 1000,
+                "product_id": product_id,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        data = response.json()
+        spec_base_prices = data.get("results", [])
         
         cities_set = set()
         result = []
@@ -267,7 +261,6 @@ def transform_base_price_callable(**context):
                 )
                 cities_set.add(sbp.get("city_id"))
 
-        
         if base_price.get("price", 0):
             for city_id in cities_dict.keys():
                 if city_id not in cities_set:
@@ -277,6 +270,7 @@ def transform_base_price_callable(**context):
                             price=base_price.get("price", 0),
                         ).to_dict()
                     )
+
         return product_id, result
 
     product_base_price_dict = {}
@@ -285,11 +279,15 @@ def transform_base_price_callable(**context):
         batch = product_ids[i:i + BATCH_SIZE]
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {
-                executor.submit(process_single_product, pid): pid for pid in batch
+                executor.submit(process_product_base_price, pid): pid for pid in batch
             }
             for future in as_completed(futures):
-                product_id, base_prices = future.result()
-                product_base_price_dict[product_id] = base_prices
+                try:
+                    product_id, base_prices = future.result()
+                    product_base_price_dict[product_id] = base_prices
+                except Exception as e:
+                    logging.error(f"failed to process product_base_price: {e}")
+                    raise
 
     save_data_to_tmp_file(context=context,
         xcom_key="product_base_price_file_path",
@@ -315,36 +313,30 @@ def transform_final_price_callable(**context):
 
     product_final_price_dict: Dict[str, List[Dict[str, Any]]] = {}
 
-    def process_single_product(product_id: str) -> (str, List[Dict[str, Any]]):
+    def process_product_final_price(product_id: str) -> (str, List[Dict[str, Any]]):
         final_price = {}
         spec_final_prices = []
 
-        try:
-            response = requests.get(
-                f"{BASE_URL}/final_price/{product_id}",
-                timeout=10,
-            )
-            response.raise_for_status()
-            final_price = response.json()
-        except requests.RequestException as e:
-            logging.warning(f"Failed to fetch final_price for product_id={product_id}: {e}")
-            return product_id, []
+        # 1
+        response = requests.get(
+            f"{BASE_URL}/final_price/{product_id}",
+            timeout=10,
+        )
+        response.raise_for_status()
+        final_price = response.json()
 
-        try:
-            response = requests.get(
-                f"{BASE_URL}/spec_final_price",
-                params={
-                    "list_params.page_size": 1000,
-                    "product_id": product_id,
-                },
-                timeout=60,
-            )
-            response.raise_for_status()
-            data = response.json()
-            spec_final_prices = data.get("results", [])
-        except requests.RequestException as e:
-            logging.warning(f"Failed to fetch warehouse data for product_id={product_id}: {e}")
-            return product_id, []
+        # 2
+        response = requests.get(
+            f"{BASE_URL}/spec_final_price",
+            params={
+                "list_params.page_size": 1000,
+                "product_id": product_id,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        data = response.json()
+        spec_final_prices = data.get("results", [])
         
         subdivisions_set = set()
         result = []
@@ -372,7 +364,6 @@ def transform_final_price_callable(**context):
                 )
                 subdivisions_set.add(sfp.get("subdivision_id"))
 
-        
         if final_price.get("price", 0):
             for sb_id, obj in subdivisions_dict.items():
                 if sb_id not in subdivisions_set:
@@ -393,11 +384,15 @@ def transform_final_price_callable(**context):
         batch = product_ids[i:i + BATCH_SIZE]
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {
-                executor.submit(process_single_product, pid): pid for pid in batch
+                executor.submit(process_product_final_price, pid): pid for pid in batch
             }
             for future in as_completed(futures):
-                product_id, final_prices = future.result()
-                product_final_price_dict[product_id] = final_prices
+                try:
+                    product_id, final_prices = future.result()
+                    product_final_price_dict[product_id] = final_prices
+                except Exception as e:
+                    logging.error(f"failed to process product_base_price: {e}")
+                    raise
 
     save_data_to_tmp_file(context=context,
         xcom_key="product_final_price_file_path",

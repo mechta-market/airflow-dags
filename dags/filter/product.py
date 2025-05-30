@@ -25,8 +25,8 @@ DAG_ID = "product"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    # "retries": 1,
+    # "retry_delay": timedelta(minutes=5),
 }
 
 # Constants
@@ -219,12 +219,11 @@ class DocumentProduct:
 
                     # Если числовой тип, добавляем единицу измерения в каждую языковую версию
                     if attr_type == "number" and m_unit_i18n:
-                        combined = {}
-                        for lang, text in label_i18n.items():
-                            if lang == "ru":
-                                t = text
-                            unit = m_unit_i18n.get(lang, "")
-                            combined[lang] = f"{t} {unit}".strip()
+                        ru_text = label_i18n.get("ru", "")
+                        combined = {
+                            lang: f"{ru_text} {m_unit_i18n.get(lang, '')}".strip()
+                            for lang in m_unit_i18n
+                        }
                         label_i18n = combined
 
                     # Если boolean тип, меняем значения на Да/Нет
@@ -349,8 +348,13 @@ def extract_data_callable(**context):
 
     extracted_products: List[dict] = []
 
+    # TEST
+    product_ids_test = [product_ids[0], product_ids[1], product_ids[2]]
+
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(fetch_product_details, id) for id in product_ids]
+        futures = [
+            executor.submit(fetch_product_details, id) for id in product_ids_test
+        ]
         for f in as_completed(futures):
             try:
                 result = f.result()

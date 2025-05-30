@@ -12,7 +12,6 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
 from filter.utils import (
-    fetch_with_retry, 
     clean_tmp_file, 
     load_data_from_tmp_file, 
     save_data_to_tmp_file
@@ -314,6 +313,7 @@ with DAG(
     description='DAG to upload product_warehouses data from Store service to Elasticsearch index',
     start_date=datetime(2025, 5, 22, 0, 5),
     schedule="*/10 * * * *",
+    max_active_runs=1,
     catchup=False,
     tags=["nsi", "elasticsearch", "store"],
 ) as dag:

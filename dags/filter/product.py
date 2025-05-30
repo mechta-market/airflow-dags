@@ -396,6 +396,7 @@ with DAG(
     description='DAG to upload products from NSI service to Elasticsearch index',
     start_date=datetime(2025, 5, 22),
     schedule="0 * * * *",
+    max_active_runs=1,
     catchup=False,
     tags=["elasticsearch", "nsi"],
 ) as dag:

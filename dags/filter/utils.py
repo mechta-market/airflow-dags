@@ -1,6 +1,8 @@
+import json
 import time
 import os
 import logging
+from typing import Any
 
 import requests
 
@@ -33,3 +35,28 @@ def clean_tmp_file(file_path: str):
         logging.info(f"clean_tmp_file: file removed: {file_path}")
     else:
         logging.info(f"clean_tmp_file: file not found: {file_path}")
+
+def load_data_from_tmp_file(context, xcom_key: str, task_id: str) -> Any:
+    file_path = context["ti"].xcom_pull(key=xcom_key, task_ids=task_id)
+
+    if not file_path or not os.path.exists(file_path):
+        raise FileNotFoundError(f"file not found: {file_path}")
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        logging.error(f"couldn't load data from {file_path}, error: {e}")
+        raise
+
+    return data
+
+def save_data_to_tmp_file(context, xcom_key:str, data: Any, file_path: str):
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as e:
+        logging.error(f"couldn't save data to {file_path}, error: {e}")
+        raise
+
+    context["ti"].xcom_push(key=xcom_key, value=file_path)

@@ -1,6 +1,4 @@
-import json
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
@@ -13,7 +11,12 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import fetch_with_retry, clean_tmp_file
+from filter.utils import (
+    fetch_with_retry, 
+    clean_tmp_file, 
+    load_data_from_tmp_file, 
+    save_data_to_tmp_file
+)
 from helpers.utils import elastic_conn
 
 # DAG parameters
@@ -38,31 +41,6 @@ TARGET_LANGUAGES = ["ru", "kz"]
 logging.basicConfig(level=logging.INFO)
 
 # Functions
-
-def load_data_from_tmp_file(context, xcom_key: str, task_id: str) -> Any:
-    file_path = context["ti"].xcom_pull(key=xcom_key, task_ids=task_id)
-
-    if not file_path or not os.path.exists(file_path):
-        raise FileNotFoundError(f"file not found: {file_path}")
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception as e:
-        logging.error(f"couldn't load data from {file_path}, error: {e}")
-        raise
-
-    return data
-
-def save_data_to_tmp_file(context, xcom_key:str, data: Any, file_path: str):
-    try:
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-    except Exception as e:
-        logging.error(f"couldn't save data to {file_path}, error: {e}")
-        raise
-
-    context["ti"].xcom_push(key=xcom_key, value=file_path)
 
 class DocumentProduct:
     def __init__(self, p: dict):
@@ -324,9 +302,7 @@ def delete_different_data_callable(**context):
     existing_ids_query = {
         "_source": False,
         "fields": ["_id"],
-        "query": {
-            "match_all": {}
-        },
+        "query": { "match_all": {} }
     }
 
     try:
@@ -340,7 +316,8 @@ def delete_different_data_callable(**context):
         logging.error(f"failed to fetch ids from Elasticsearch: {e}")
         raise
     finally:
-        client.clear_scroll(scroll_id=scroll_id)
+        if scroll_id:
+            client.clear_scroll(scroll_id=scroll_id)
 
     ids_to_delete = existing_ids - transformed_product_ids
 
@@ -364,6 +341,7 @@ def delete_different_data_callable(**context):
         except Exception as bulk_error:
             logging.error(f"bulk delete failed, error: {bulk_error}")
             raise
+
 
 def load_data_callable(**context):
     transformed_products = load_data_from_tmp_file(context,
@@ -397,16 +375,20 @@ def load_data_callable(**context):
         logging.error(f"bulk update failed, error: {bulk_error}")
         raise
 
-def cleanup_temp_files_callable(**context):
-    temp_file_keys = [
-        ("extract_data_file_path", "extract_data_task"),
-        ("transform_data_file_path", "transform_data_task"),
+
+def cleanup_temp_files_callable(**context):    
+    tmp_file_keys = [
+        {"xcom_key": "extract_data_file_path", "task_id": "extract_data_task"},
+        {"xcom_key": "transform_data_file_path", "task_id": "transform_data_task"},
     ]
 
-    for key, task_id in temp_file_keys:
-        file_path = context["ti"].xcom_pull(key=key, task_ids=task_id)
+    for tmp_file in tmp_file_keys:
+        file_path = context["ti"].xcom_pull(
+            key=tmp_file.get("xcom_key"), task_ids=tmp_file.get("task_id")
+        )
         if file_path:
             clean_tmp_file(file_path)
+
 
 with DAG(
     dag_id=DAG_ID,

@@ -28,8 +28,8 @@ DAG_ID="product_warehouse"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    # "retries": 1,
+    # "retry_delay": timedelta(minutes=5),
 }
 
 # Constants
@@ -190,41 +190,18 @@ def get_city_warehouse_callable(**context):
 
 
 def transform_data_callable(**context):
-    product_ids = []
-    warehouses_dict = {}
-    warehouse_cities_dict = {}
-
-    product_ids_file_path = context["ti"].xcom_pull(
-        key="product_ids_file_path", task_ids="get_product_ids_task"
+    product_ids = load_data_from_tmp_file(context=context, 
+        xcom_key="product_ids_file_path",
+        task_id="get_product_ids_task",
     )
-
-    if not product_ids_file_path or not os.path.exists(product_ids_file_path):
-        raise FileNotFoundError(f"File not found: {product_ids_file_path}")
-
-    with open(product_ids_file_path, "r", encoding="utf-8") as f:
-        product_ids = json.load(f)
-
-    warehouses_file_path = context["ti"].xcom_pull(
-        key="warehouses_file_path", task_ids="get_warehouse_task"
+    warehouses_dict = load_data_from_tmp_file(context=context, 
+        xcom_key="warehouses_file_path",
+        task_id="get_warehouse_task",
     )
-
-    if not warehouses_file_path or not os.path.exists(warehouses_file_path):
-        raise FileNotFoundError(f"File not found: {warehouses_file_path}")
-
-    with open(warehouses_file_path, "r", encoding="utf-8") as f:
-        warehouses_dict = json.load(f)
-
-    warehouse_cities_file_path = context["ti"].xcom_pull(
-        key="warehouse_cities_file_path", task_ids="get_city_warehouse_task"
+    warehouse_cities_dict = load_data_from_tmp_file(context=context, 
+        xcom_key="warehouse_cities_file_path",
+        task_id="get_city_warehouse_task",
     )
-
-    if not warehouse_cities_file_path or not os.path.exists(warehouse_cities_file_path):
-        raise FileNotFoundError(f"File not found: {warehouse_cities_file_path}")
-
-    with open(warehouse_cities_file_path, "r", encoding="utf-8") as f:
-        warehouse_cities_dict = json.load(f)
-
-    # do
 
     MAX_WORKERS = 5
     BATCH_SIZE = 100
@@ -232,7 +209,7 @@ def transform_data_callable(**context):
 
     product_warehouse_dict: Dict[str, List[Dict[str, Any]]] = {}
 
-    def process_single_product(product_id: str) -> (str, List[Dict[str, Any]]):
+    def process_product_warehouse(product_id: str) -> (str, List[Dict[str, Any]]):
         try:
             response = requests.get(
                 f"{BASE_URL}/product_warehouse",
@@ -270,7 +247,7 @@ def transform_data_callable(**context):
     for i in range(0, len(product_ids), BATCH_SIZE):
         batch = product_ids[i:i + BATCH_SIZE]
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {executor.submit(process_single_product, pid): pid for pid in batch}
+            futures = {executor.submit(process_product_warehouse, pid): pid for pid in batch}
             for future in as_completed(futures):
                 product_id, docs = future.result()
                 if docs:
@@ -285,21 +262,12 @@ def transform_data_callable(**context):
 
 
 def load_data_callable(**context):
-    file_path = context["ti"].xcom_pull(
-        key="product_warehouses_file_path", task_ids="transform_data_task"
+    product_warehouses_dict = load_data_from_tmp_file(context=context, 
+        xcom_key="product_warehouses_file_path",
+        task_id="transform_data_task",
     )
 
-    if not file_path or not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        product_warehouses_dict = json.load(f)
-    
-    hosts = ["http://mdm.default:9200"]
-    es_hook = ElasticsearchPythonHook(
-        hosts=hosts,
-    )
-    client = es_hook.get_conn
+    client = elastic_conn(Variable.get("elastic_scheme"))
 
     actions = []
     for product_id, warehouses in product_warehouses_dict.items():

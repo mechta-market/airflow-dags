@@ -34,62 +34,92 @@ TARGET_LANGUAGES = ["ru", "kz"]
 
 
 # Functions
-def transform_properties(product: dict) -> Dict[str, Any]:
-    grps = []
-    groups = product.get("property_model", {}).get("groups", [])
+def transform_properties(product: Dict[str, Any]) -> Dict[Any, List[Dict[str, Any]]]:
+    product_id = product.get("id")
+    groups = product.get("property_model", {}).get("groups") or []
+    result_groups: List[Dict[str, Any]] = []
+
     for group in groups:
-        attributes = []
-        for attribute in group.get("attributes"):
-            attribute_data = attribute.get("data")
-            attribute_value = attribute.get("value")
+        attributes: List[Dict[str, Any]] = []
+        for attribute in group.get("attributes") or []:
+            data = attribute.get("data") or {}
+            opts = data.get("options") or []
+            m_unit_i18n = data.get("m_unit_i18n") or {}
+
+            # Строим fast lookup для меток
             label_map = {
-                option.get("label"): {
-                    "label_i18n": option.get("label_i18n", {}),
-                    "m_unit_i18n": attribute_data.get("m_unit_i18n"),
+                opt.get("label", ""): {
+                    "label_i18n": opt.get("label_i18n", {}),
+                    "m_unit_i18n": m_unit_i18n,
                 }
-                for option in attribute_data.get("options", [])
+                for opt in opts
+                if isinstance(opt, dict)
             }
 
-            values = []
-            for slug, v in zip(
-                attribute_value.get("slugs"), attribute_value.get("values_i18n")
-            ):
-                option = label_map.get(v.get("ru"), {})
-                label_i18n = (
-                    option.get("label_i18n") or v
-                )  # если label_i18n None или ""
-                m_unit_i18n = attribute_data.get("m_unit_i18n")
+            value = attribute.get("value") or {}
+            slugs = value.get("slugs") or []
+            vals_i18n = value.get("values_i18n") or []
+            attr_type = attribute.get("type")
+
+            # Собираем values
+            values: List[Dict[str, Any]] = []
+            for slug, v_i18n in zip(slugs, vals_i18n):
+                ru_label = v_i18n.get("ru", "")
+                opt_info = label_map.get(ru_label, {})
+                label_i18n = opt_info.get("label_i18n") or v_i18n
+
+                # Если числовой тип, добавляем единицу измерения в каждую языковую версию
+                if attr_type == "number" and m_unit_i18n:
+                    combined = {}
+                    for lang, text in label_i18n.items():
+                        unit = m_unit_i18n.get(lang, "")
+                        combined[lang] = f"{text} {unit}".strip()
+                    label_i18n = combined
+                    
+                # Если boolean тип, меняем значения на Да/Нет
+                if attr_type == "boolean":
+                    if ru_label == "true":
+                        label_i18n = {
+                            "kz": "Иә",
+                            "ru": "Да",
+                        }
+                    if ru_label == "false":
+                        label_i18n = {
+                            "kz": "Жоқ",
+                            "ru": "Нет",
+                        }
                 values.append(
                     {
                         "slug": slug,
                         "label_i18n": label_i18n,
-                        "m_unit_i18n": m_unit_i18n,
                     }
                 )
 
             attributes.append(
                 {
                     "id": attribute.get("id"),
-                    "name_i18n": attribute.get("name_i18n"),
-                    "type": attribute.get("type"),
+                    "name_i18n": attribute.get("name_i18n") or {},
+                    "type": attr_type,
                     "ord": attribute.get("ord"),
-                    "values": values,
-                    "flags": attribute.get("flags"),
+                    "flags": attribute.get("flags") or {},
                     "slug": attribute.get("slug"),
+                    "values": values,
                 }
             )
 
-        grps.append(
+        result_groups.append(
             {
                 "id": group.get("id"),
-                "name_i18n": group.get("name_i18n"),
+                "name_i18n": group.get("name_i18n") or {},
                 "ord": group.get("ord"),
+                "flags": group.get("flags") or {},
                 "attributes": attributes,
             }
         )
-    p = {product.get("id"): grps}
-    logging.info(f"product {p}")
-    return p
+
+    transformed = {product_id: result_groups}
+    logging.info("Transformed properties for product: %s", transformed)
+    return transformed
 
 
 # Tasks

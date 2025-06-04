@@ -209,7 +209,7 @@ def transform_base_price_callable(**context):
         task_id="get_city_task",
     )
 
-    MAX_WORKERS = 5
+    MAX_WORKERS = 3
     BATCH_SIZE = 100
     BASE_URL = Variable.get("price_host")
 
@@ -309,7 +309,7 @@ def transform_final_price_callable(**context):
     )
 
     BASE_URL = Variable.get("price_host")
-    MAX_WORKERS = 5
+    MAX_WORKERS = 3
     BATCH_SIZE = 100
 
     product_final_price_dict: Dict[str, List[Dict[str, Any]]] = {}

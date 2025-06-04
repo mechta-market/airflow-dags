@@ -348,9 +348,7 @@ def extract_data_callable(**context):
     extracted_products: List[dict] = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [
-            executor.submit(fetch_product_details, id) for id in product_ids
-        ]
+        futures = [executor.submit(fetch_product_details, id) for id in product_ids]
         for f in as_completed(futures):
             try:
                 result = f.result()

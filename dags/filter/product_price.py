@@ -14,17 +14,13 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import (
-    clean_tmp_file, 
-    load_data_from_tmp_file, 
-    save_data_to_tmp_file
-)
+from filter.utils import clean_tmp_file, load_data_from_tmp_file, save_data_to_tmp_file
 from helpers.utils import elastic_conn
 
 
 # DAG parameters
 
-DAG_ID="product_price"
+DAG_ID = "product_price"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
@@ -47,6 +43,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Functions
 
+
 class DocumentBasePrice:
     def __init__(self, city_id: str, price: float):
         self.city_id = city_id
@@ -58,8 +55,11 @@ class DocumentBasePrice:
             "price": self.price,
         }
 
+
 class DocumentFinalPrice:
-    def __init__(self, city_id: str, subdivision_id: str, is_i_shop: bool, price: float):
+    def __init__(
+        self, city_id: str, subdivision_id: str, is_i_shop: bool, price: float
+    ):
         self.city_id = city_id
         self.subdivision_id = subdivision_id
         self.is_i_shop = is_i_shop
@@ -73,19 +73,23 @@ class DocumentFinalPrice:
             "price": self.price,
         }
 
+
 # Tasks
+
 
 def get_product_ids_callable(**context):
     client = elastic_conn(Variable.get("elastic_scheme"))
-    
+
     existing_ids_query = {
         "_source": False,
         "fields": ["_id"],
-        "query": { "match_all": {} }
+        "query": {"match_all": {}},
     }
 
     try:
-        response = client.search(index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m")
+        response = client.search(
+            index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m"
+        )
         scroll_id = response["_scroll_id"]
         existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
         while len(response["hits"]["hits"]) > 0:
@@ -100,7 +104,8 @@ def get_product_ids_callable(**context):
 
     product_ids = list(existing_ids)
 
-    save_data_to_tmp_file(context=context,
+    save_data_to_tmp_file(
+        context=context,
         xcom_key="product_ids_file_path",
         data=product_ids,
         file_path=f"/tmp/{DAG_ID}.product_ids.json",
@@ -140,13 +145,10 @@ def get_city_callable(**context):
             logging.error(f"error during fetching cities: {e}")
             break
 
-    cities_dict: Dict[str, dict] = {
-        c["id"]: c
-        for c in cities
-        if c.get("id")
-    }
+    cities_dict: Dict[str, dict] = {c["id"]: c for c in cities if c.get("id")}
 
-    save_data_to_tmp_file(context=context,
+    save_data_to_tmp_file(
+        context=context,
         xcom_key="cities_file_path",
         data=cities_dict,
         file_path=f"/tmp/{DAG_ID}.city.json",
@@ -188,12 +190,11 @@ def get_subdivision_callable(**context):
             break
 
     subdivisions_dict: Dict[str, dict] = {
-        s["id"]: s
-        for s in subdivisions
-        if s.get("id")
+        s["id"]: s for s in subdivisions if s.get("id")
     }
 
-    save_data_to_tmp_file(context=context,
+    save_data_to_tmp_file(
+        context=context,
         xcom_key="subdivisions_file_path",
         data=subdivisions_dict,
         file_path=f"/tmp/{DAG_ID}.subdivision.json",
@@ -202,11 +203,13 @@ def get_subdivision_callable(**context):
 
 
 def transform_base_price_callable(**context):
-    product_ids = load_data_from_tmp_file(context=context, 
+    product_ids = load_data_from_tmp_file(
+        context=context,
         xcom_key="product_ids_file_path",
         task_id="get_product_ids_task",
     )
-    cities_dict = load_data_from_tmp_file(context=context, 
+    cities_dict = load_data_from_tmp_file(
+        context=context,
         xcom_key="cities_file_path",
         task_id="get_city_task",
     )
@@ -229,7 +232,7 @@ def transform_base_price_callable(**context):
         if response.status_code == 400:
             if response.json().get("code") == ERR_NO_ROWS:
                 return product_id, []
-        
+
         response.raise_for_status()
         base_price = response.json()
 
@@ -245,7 +248,7 @@ def transform_base_price_callable(**context):
         response.raise_for_status()
         data = response.json()
         spec_base_prices = data.get("results", [])
-        
+
         cities_set = set()
         result = []
 
@@ -283,7 +286,7 @@ def transform_base_price_callable(**context):
     product_base_price_dict = {}
 
     for i in range(0, len(product_ids), BATCH_SIZE):
-        batch = product_ids[i:i + BATCH_SIZE]
+        batch = product_ids[i : i + BATCH_SIZE]
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {
                 executor.submit(process_product_base_price, pid): pid for pid in batch
@@ -296,20 +299,25 @@ def transform_base_price_callable(**context):
                     logging.error(f"failed to process product_base_price: {e}")
                     raise
 
-    save_data_to_tmp_file(context=context,
+    save_data_to_tmp_file(
+        context=context,
         xcom_key="product_base_price_file_path",
         data=dict(product_base_price_dict),
         file_path=f"/tmp/{DAG_ID}.product_base_price.json",
     )
-    logging.info(f"transformed product_base_prices count: {len(product_base_price_dict)}")
+    logging.info(
+        f"transformed product_base_prices count: {len(product_base_price_dict)}"
+    )
 
 
 def transform_final_price_callable(**context):
-    product_ids = load_data_from_tmp_file(context=context, 
+    product_ids = load_data_from_tmp_file(
+        context=context,
         xcom_key="product_ids_file_path",
         task_id="get_product_ids_task",
     )
-    subdivisions_dict = load_data_from_tmp_file(context=context, 
+    subdivisions_dict = load_data_from_tmp_file(
+        context=context,
         xcom_key="subdivisions_file_path",
         task_id="get_subdivision_task",
     )
@@ -332,7 +340,7 @@ def transform_final_price_callable(**context):
         if response.status_code == 400:
             if response.json().get("code") == ERR_NO_ROWS:
                 return product_id, []
-        
+
         response.raise_for_status()
         final_price = response.json()
 
@@ -348,7 +356,7 @@ def transform_final_price_callable(**context):
         response.raise_for_status()
         data = response.json()
         spec_final_prices = data.get("results", [])
-        
+
         subdivisions_set = set()
         result = []
 
@@ -364,13 +372,19 @@ def transform_final_price_callable(**context):
             subdivisions_set.add(ASTANA_OFFICE_SUBDIVISION_ID)
 
         for sfp in spec_final_prices:
-            if sfp.get("price", 0) and subdivisions_dict.get(sfp.get("subdivision_id", "")):
+            if sfp.get("price", 0) and subdivisions_dict.get(
+                sfp.get("subdivision_id", "")
+            ):
                 result.append(
                     DocumentFinalPrice(
                         subdivision_id=sfp.get("subdivision_id", ""),
                         price=sfp.get("price", 0),
-                        city_id=subdivisions_dict[sfp.get("subdivision_id")].get("city_id", ""),
-                        is_i_shop=subdivisions_dict[sfp.get("subdivision_id")].get("is_i_shop", False),
+                        city_id=subdivisions_dict[sfp.get("subdivision_id")].get(
+                            "city_id", ""
+                        ),
+                        is_i_shop=subdivisions_dict[sfp.get("subdivision_id")].get(
+                            "is_i_shop", False
+                        ),
                     ).to_dict()
                 )
                 subdivisions_set.add(sfp.get("subdivision_id"))
@@ -392,7 +406,7 @@ def transform_final_price_callable(**context):
     product_final_price_dict = {}
 
     for i in range(0, len(product_ids), BATCH_SIZE):
-        batch = product_ids[i:i + BATCH_SIZE]
+        batch = product_ids[i : i + BATCH_SIZE]
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = {
                 executor.submit(process_product_final_price, pid): pid for pid in batch
@@ -405,17 +419,20 @@ def transform_final_price_callable(**context):
                     logging.error(f"failed to process product_base_price: {e}")
                     raise
 
-    save_data_to_tmp_file(context=context,
+    save_data_to_tmp_file(
+        context=context,
         xcom_key="product_final_price_file_path",
         data=dict(product_final_price_dict),
         file_path=f"/tmp/{DAG_ID}.product_final_price.json",
     )
-    logging.info(f"transformed product_final_prices count: {len(product_final_price_dict)}")
+    logging.info(
+        f"transformed product_final_prices count: {len(product_final_price_dict)}"
+    )
 
 
 def load_base_price_callable(**context):
     product_base_price_dict = load_data_from_tmp_file(
-        context=context, 
+        context=context,
         xcom_key="product_base_price_file_path",
         task_id="transform_base_price_task",
     )
@@ -424,15 +441,15 @@ def load_base_price_callable(**context):
 
     actions = []
     for product_id, base_price in product_base_price_dict.items():
-        actions.append({
-            "_op_type": "update",
-            "_index": INDEX_NAME,
-            "_id": product_id,
-            "retry_on_conflict": 3,
-            "doc": { 
-                "base_price": base_price 
-            },
-        })
+        actions.append(
+            {
+                "_op_type": "update",
+                "_index": INDEX_NAME,
+                "_id": product_id,
+                "retry_on_conflict": 3,
+                "doc": {"base_price": base_price},
+            }
+        )
 
     try:
         success, errors = helpers.bulk(
@@ -445,9 +462,10 @@ def load_base_price_callable(**context):
         logging.error(f"bulk update failed: {bulk_error}")
         raise
 
+
 def load_final_price_callable(**context):
     product_final_price_dict = load_data_from_tmp_file(
-        context=context, 
+        context=context,
         xcom_key="product_final_price_file_path",
         task_id="transform_final_price_task",
     )
@@ -456,15 +474,15 @@ def load_final_price_callable(**context):
 
     actions = []
     for product_id, final_price in product_final_price_dict.items():
-        actions.append({
-            "_op_type": "update",
-            "_index": INDEX_NAME,
-            "_id": product_id,
-            "retry_on_conflict": 3,
-            "doc": { 
-                "final_price": final_price 
-            },
-        })
+        actions.append(
+            {
+                "_op_type": "update",
+                "_index": INDEX_NAME,
+                "_id": product_id,
+                "retry_on_conflict": 3,
+                "doc": {"final_price": final_price},
+            }
+        )
 
     try:
         success, errors = helpers.bulk(
@@ -477,13 +495,20 @@ def load_final_price_callable(**context):
         logging.error(f"bulk update failed: {bulk_error}")
         raise
 
+
 def cleanup_temp_files_callable(**context):
     tmp_file_keys = [
         {"xcom_key": "product_ids_file_path", "task_id": "get_product_ids_task"},
         {"xcom_key": "cities_file_path", "task_id": "get_city_task"},
         {"xcom_key": "subdivisions_file_path", "task_id": "get_subdivision_task"},
-        {"xcom_key": "product_base_price_file_path", "task_id": "transform_base_price_task"},
-        {"xcom_key": "product_final_price_file_path", "task_id": "transform_final_price_task"},
+        {
+            "xcom_key": "product_base_price_file_path",
+            "task_id": "transform_base_price_task",
+        },
+        {
+            "xcom_key": "product_final_price_file_path",
+            "task_id": "transform_final_price_task",
+        },
     ]
 
     for tmp_file in tmp_file_keys:
@@ -493,12 +518,13 @@ def cleanup_temp_files_callable(**context):
         if file_path:
             clean_tmp_file(file_path)
 
-# DAG 
+
+# DAG
 
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    description='DAG to upload product_price data from Price service to Elasticsearch index',
+    description="DAG to upload product_price data from Price service to Elasticsearch index",
     start_date=datetime(2025, 5, 22),
     schedule="30 * * * *",
     max_active_runs=1,
@@ -552,7 +578,7 @@ with DAG(
         provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
-    
+
     cleanup_temp_files = PythonOperator(
         task_id="cleanup_temp_files_task",
         python_callable=cleanup_temp_files_callable,

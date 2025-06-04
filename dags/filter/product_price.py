@@ -28,8 +28,8 @@ DAG_ID="product_price"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    # "retries": 1,
-    # "retry_delay": timedelta(minutes=5),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=3),
 }
 
 # Constants

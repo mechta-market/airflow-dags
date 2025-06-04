@@ -39,6 +39,8 @@ INDEX_NAME = "product_v1"
 ASTANA_CITY_ID = "cc4316f8-4333-11ea-a22d-005056b6dbd7"
 ASTANA_OFFICE_SUBDIVISION_ID = "3bd9bf4f-7dd7-11e8-a213-005056b6dbd7"
 
+ERR_NO_ROWS = "err_no_rows"
+
 # Configurations
 
 logging.basicConfig(level=logging.INFO)
@@ -224,6 +226,10 @@ def transform_base_price_callable(**context):
             f"{BASE_URL}/base_price/{product_id}",
             timeout=10,
         )
+        if response.status_code == 400:
+            if response.json().get("code") == ERR_NO_ROWS:
+                return product_id, []
+        
         response.raise_for_status()
         base_price = response.json()
 
@@ -323,6 +329,10 @@ def transform_final_price_callable(**context):
             f"{BASE_URL}/final_price/{product_id}",
             timeout=10,
         )
+        if response.status_code == 400:
+            if response.json().get("code") == ERR_NO_ROWS:
+                return product_id, []
+        
         response.raise_for_status()
         final_price = response.json()
 

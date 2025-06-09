@@ -13,7 +13,7 @@ INDEX_NAME = f"{DICTIONARY_NAME}_nsi"
 
 def fetch_data_callable(**context):
     """Получаем данные из NSI и сохраняем в XCom."""
-    resp = request_to_nsi_api(host=Variable.get("nsi_host"), endpoint={DICTIONARY_NAME})
+    resp = request_to_nsi_api(host=Variable.get("nsi_host"), endpoint=DICTIONARY_NAME)
     context["ti"].xcom_push(key="fetched_data", value=resp.get("results", []))
 
 

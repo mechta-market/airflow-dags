@@ -1,0 +1,65 @@
+{
+  "mappings": {
+    "properties": {
+      "all_properties": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "keyword", "index": false },
+              "ord": { "type": "integer", "index": false },
+              "flags": {
+                "type": "object",
+                "enabled": false
+              },
+              "name_i18n": {
+                "type": "object",
+                "enabled": false,
+                "properties": {
+                  "ru": { "type": "text", "index": false },
+                  "kz": { "type": "text", "index": false }
+                }
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "keyword", "index": false },
+                  "type": { "type": "keyword", "index": false },
+                  "ord": { "type": "integer", "index": false },
+                  "slug": { "type": "keyword", "index": false },
+                  "flags": {
+                    "type": "object",
+                    "enabled": false
+                  },
+                  "name_i18n": {
+                    "type": "object",
+                    "enabled": false,
+                    "properties": {
+                      "ru": { "type": "text", "index": false },
+                      "kz": { "type": "text", "index": false }
+                    }
+                  },
+                  "values": {
+                    "type": "object",
+                    "properties": {
+                      "slug": { "type": "text", "index": false },
+                      "label_i18n": {
+                        "type": "object",
+                        "enabled": false,
+                        "properties": {
+                          "ru": { "type": "text", "index": false },
+                          "kz": { "type": "text", "index": false }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

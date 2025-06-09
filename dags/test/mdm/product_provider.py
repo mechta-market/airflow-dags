@@ -24,7 +24,7 @@ def fetch_data_callable(**context) -> None:
             f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"
         )
         return
-    print(f"response: {response}")
+    logging.info(f"response: {response}")
     context["ti"].xcom_push(key="fetched_data", value=response.get("data"))
 
 

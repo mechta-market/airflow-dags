@@ -1,8 +1,7 @@
 import logging
 from datetime import datetime
 from helpers.utils import (
-    elastic_conn,
-    request_to_1c,
+    request_to_1c_with_data,
     normalize_zero_uuid_fields,
     ZERO_UUID,
 )
@@ -18,7 +17,9 @@ NORMALIZE_FIELDS = ["id"]
 
 def fetch_data_callable(**context) -> None:
     """Получаем данные из 1c и сохраняем в XCom."""
-    response = request_to_1c(host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME)
+    response = request_to_1c_with_data(
+        host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME, data={"type": 2}
+    )
     if not response.get("success", False):
         logging.error(
             f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"

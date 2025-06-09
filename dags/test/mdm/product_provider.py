@@ -18,14 +18,14 @@ NORMALIZE_FIELDS = ["id"]
 def fetch_data_callable(**context) -> None:
     """Получаем данные из 1c и сохраняем в XCom."""
     response = request_to_1c_with_data(
-        host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME, data={"type": 2}
+        host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME, data='{"type": 2}'
     )
     if not response.get("success", False):
         logging.error(
             f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"
         )
         return
-    logging.info(f"response: {response}")
+    logging.info(f"response: {response.get("data")}")
     context["ti"].xcom_push(key="fetched_data", value=response.get("data"))
 
 

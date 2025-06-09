@@ -55,6 +55,7 @@ def upsert_to_es_callable(**context):
         for item in items
         if item.get("id")
     ]
+    logging.info(f"ACTIONS COUNT {len(actions)}.")
 
     try:
         success, errors = helpers.bulk(

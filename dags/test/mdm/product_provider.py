@@ -12,20 +12,19 @@ from airflow.operators.python_operator import PythonOperator
 
 
 DICTIONARY_NAME = "product"
-NORMALIZE_FIELDS = ["id"]
 
 
 def fetch_data_callable(**context) -> None:
     """Получаем данные из 1c и сохраняем в XCom."""
     response = request_to_1c_with_data(
-        host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME, payload={'type': 2}
+        host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME, payload={"type": 2}
     )
     if not response.get("success", False):
         logging.error(
             f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"
         )
         return
-    logging.info(f"response: {response.get("data")}")
+
     context["ti"].xcom_push(key="fetched_data", value=response.get("data"))
 
 
@@ -37,10 +36,16 @@ def normalize_data_callable(**context) -> None:
 
     normalized = []
     for item in items:
+        if item.get("service_type") != 2:
+            continue
         if item.get("id") == ZERO_UUID:
             continue
-        normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
+        if not item.get("e_product_info"):
+            continue
+        normalize = {"id": item.get("id"), "provider": item.get("e_product_info")}
+        normalized.append(normalize)
 
+    logging.info(f"normalized: {normalized}")
     context["ti"].xcom_push(key="normalized_data", value=normalized)
 
 

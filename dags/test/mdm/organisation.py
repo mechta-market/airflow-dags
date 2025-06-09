@@ -28,6 +28,7 @@ def fetch_data_callable(**context) -> None:
     context["ti"].xcom_push(key="fetched_data", value=response.get("data"))
 
 
+
 def normalize_data_callable(**context) -> None:
     """Нормализация данных перед загрузкой в Elasticsearch."""
     items = context["ti"].xcom_pull(key="fetched_data", task_ids="fetch_data_task")

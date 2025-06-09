@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime
 from helpers.utils import (
+    elastic_conn,
     request_to_1c_with_data,
-    normalize_zero_uuid_fields,
     ZERO_UUID,
 )
 
@@ -10,8 +10,12 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
+
 
 DICTIONARY_NAME = "product"
+INDEX_NAME = "product_v1"
 
 
 def fetch_data_callable(**context) -> None:
@@ -49,6 +53,37 @@ def normalize_data_callable(**context) -> None:
     context["ti"].xcom_push(key="normalized_data", value=normalized)
 
 
+def upsert_to_es_callable(**context):
+    items = context["ti"].xcom_pull(
+        key="normalized_data", task_ids="normalize_data_task"
+    )
+    if not items:
+        return
+
+    client = elastic_conn(Variable.get("elastic_scheme"))
+
+    actions = [
+        {
+            "_op_type": "update",
+            "_index": INDEX_NAME,
+            "_id": item.get("id"),
+            "doc": {"provider": item.get("provider")},
+        }
+        for item in items
+        if item.get("id")
+    ]
+
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
+        )
+        logging.info(f"Successfully updated {success} documents.")
+        if errors:
+            logging.error(f"Errors encountered: {errors}")
+    except BulkIndexError as bulk_error:
+        logging.error(f"Bulk update failed: {bulk_error}")
+
+
 default_args = {
     "owner": "Amir",
     "depends_on_past": False,
@@ -75,4 +110,10 @@ with DAG(
         provide_context=True,
     )
 
-    fetch_data >> normalize_data
+    upsert_to_es = PythonOperator(
+        task_id="upsert_to_es_task",
+        python_callable=upsert_to_es_callable,
+        provide_context=True,
+    )
+
+    fetch_data >> normalize_data >> upsert_to_es

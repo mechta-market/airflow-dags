@@ -16,10 +16,10 @@ def request_to_1c(host: str, dic_name: str) -> dict:
     return resp.json()
 
 
-def request_to_1c_with_data(host: str, dic_name: str, data: str) -> dict:
+def request_to_1c_with_data(host: str, dic_name: str, payload) -> dict:
     url = f"{host}/send/by_db_name/AstOffice/getbaseinfo/{dic_name}"
 
-    resp = requests.post(url, timeout=30, data=data)
+    resp = requests.post(url, timeout=30, json=payload)
     resp.raise_for_status()
     return resp.json()
 

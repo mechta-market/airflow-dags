@@ -49,7 +49,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id=f"{DICTIONARY_NAME}",
+    dag_id="product_provider",
     default_args=default_args,
     schedule_interval="15 * * * *",
     start_date=datetime(2025, 5, 14),

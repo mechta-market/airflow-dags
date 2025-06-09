@@ -175,7 +175,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id=f"product_actions_etl",
+    dag_id=f"product_actions",
     default_args=default_args,
     schedule_interval="*/60 * * * *",
     start_date=datetime(2025, 5, 27),

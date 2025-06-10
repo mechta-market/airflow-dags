@@ -33,30 +33,7 @@ def fetch_data_callable(**context):
         )
         resp.raise_for_status()
         payload = resp.json()
-        products = payload.get("products", [])
-        for product in products: 
-            if product.get("id") == "f6dd62bd-5929-11ef-a269-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-            if product.get("id") =="db131aa6-0918-11ef-a265-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-            if product.get("id") =="db131aa9-0918-11ef-a265-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-            if product.get("id") =="db131aab-0918-11ef-a265-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-            if product.get("id") =="13be9d09-4d60-11ef-a267-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-            if product.get("id") =="f6dd62bd-5929-11ef-a269-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-            if product.get("id") =="6a871751-5a02-11ef-a269-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-            if product.get("id") =="0ed57860-6051-11ef-a269-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-            if product.get("id") =="5e49435a-7fb3-11ef-a269-005056b6e990":
-                logging.info(f"PAGE={page} CONTENT: {product}")
-
-                
-        
-        return products
+        return payload.get("products", [])
 
     initial_response = requests.get(
         url,
@@ -79,7 +56,7 @@ def fetch_data_callable(**context):
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
             executor.submit(fetch_page, page): page
-            for page in range(1, total_pages)
+            for page in range(2, total_pages + 1)
         }
         for future in as_completed(futures):
             try:
@@ -139,21 +116,36 @@ def delete_previous_data_callable(**context):
 
     except Exception as e:
         logging.error(f"Failed to fetch existing IDs from Elasticsearch: {e}")
-        return
+        raise
+    finally:
+        if scroll_id:
+            client.clear_scroll(scroll_id=scroll_id)
+
     
-    ids_to_delete = existing_ids - set(incoming_ids)
+    ids_to_delete = existing_ids - incoming_ids
+    logging.info(f"existing_ids len = {len(existing_ids)}")
+    logging.info(f"incoming_ids len = {len(incoming_ids)}")
     
-    for doc_id in ids_to_delete:
-        client.update(
-            index=INDEX_NAME,
-            id=doc_id,
-            body={
-                "script": {
-                    "lang": "painless",
-                    "source": "ctx._source.actions = []"
-                }
-            }
+    actions = [
+        {
+            "_op_type": "update",
+            "_index": INDEX_NAME,
+            "_id": doc_id,
+            "doc": {"actions": []}
+        }
+        for doc_id in ids_to_delete
+    ]
+    
+    try:
+        success, errors = helpers.bulk(
+            client, actions, refresh="wait_for", stats_only=False
         )
+        logging.info(f"delete success, deleted document count: {success}")
+        if errors:
+            logging.error(f"error during bulk delete: {errors}")
+    except Exception as bulk_error:
+            logging.error(f"bulk delete failed, error: {bulk_error}")
+            raise
         
     logging.info(f"Updated {len(ids_to_delete)} fields to empty actions")
 
@@ -173,6 +165,7 @@ def upsert_to_es_callable(**context):
 
     if not items:
         return
+    logging.info(f"items LEN={len(items)}")
 
     hosts = ["http://mdm.default:9200"]
     es_hook = ElasticsearchPythonHook(hosts=hosts)

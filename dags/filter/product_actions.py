@@ -33,7 +33,10 @@ def fetch_data_callable(**context):
         )
         resp.raise_for_status()
         payload = resp.json()
-        return payload.get("products", [])
+        products = payload.get("products", [])
+        logging.info(f"PAGE={page} CONTENT: {products[0]}")
+        
+        return products
 
     initial_response = requests.get(
         url,

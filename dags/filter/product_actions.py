@@ -122,10 +122,10 @@ def delete_previous_data_callable(**context):
             client.clear_scroll(scroll_id=scroll_id)
 
     
-    ids_to_delete = existing_ids - incoming_ids
     logging.info(f"existing_ids len = {len(existing_ids)}")
     logging.info(f"incoming_ids len = {len(incoming_ids)}")
     
+    ids_to_delete = existing_ids - set(incoming_ids)
     actions = [
         {
             "_op_type": "update",

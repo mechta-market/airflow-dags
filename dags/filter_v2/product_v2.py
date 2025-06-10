@@ -351,7 +351,6 @@ class DocumentProduct:
                     "products": products_res,
                 }
             )
-        logging.info(f"res: {result}")
         return result
 
 

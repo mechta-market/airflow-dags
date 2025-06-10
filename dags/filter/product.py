@@ -76,7 +76,7 @@ class DocumentProduct:
         self.properties = self._parse_properties(p.get("property_model", {}))
         self.all_properties = self._parse_all_properties(p.get("property_model", {}))
         self.similar_products = self._parse_similar_products(
-            p.get("similar_products"), []
+            p.get("similar_products", []),
         )
 
     def _parse_i18n(self, field_i18n) -> dict:
@@ -279,7 +279,7 @@ class DocumentProduct:
             data = similar_product.get("data", {})
             options = data.get("options", [])
             m_unit_i18n = data.get("m_unit_i18n", {})
-
+            type = similar_product.get("type", "")
             # Строим fast lookup для меток
             label_map = {}
             for opt in options:
@@ -287,7 +287,6 @@ class DocumentProduct:
                     value = opt.get("value", "")
                     label_map[value] = {
                         "label_i18n": opt.get("label_i18n", {}),
-                        "m_unit_i18n": m_unit_i18n,
                     }
 
             products = similar_product.get("products", [])
@@ -295,28 +294,44 @@ class DocumentProduct:
             for product in products:
                 product_prop = product.get("property", {})
                 prop_value = product_prop.get("value")
+                value_i18n = product_prop.get("value_i18n")
+                if prop_value or prop_value in label_map:
 
-                label_info = label_map[prop_value]
-                label_i18n = label_info.get("label_i18n", {})
-                unit_i18n = label_info.get("m_unit_i18n", {})
+                    if type == "select" or type == "multi-select":
+                        label_info = label_map[prop_value]
+                        label_i18n = label_info.get("label_i18n", {})
 
-                val_ru = label_i18n.get("ru", "")
-                val_kz = label_i18n.get("kz", "")
-                m_unit_ru = unit_i18n.get("ru", "")
-                m_unit_kz = unit_i18n.get("kz", "")
+                        value_i18n = {
+                            "ru": label_i18n.get("ru", ""),
+                            "kz": label_i18n.get("kz", ""),
+                        }
+                    elif type == "number":
+                        m_unit_ru = m_unit_i18n.get("ru", "")
+                        m_unit_kz = m_unit_i18n.get("kz", "")
 
+                        value_i18n = {
+                            "ru": f"{prop_value} {m_unit_ru}".strip(),
+                            "kz": f"{prop_value} {m_unit_kz}".strip(),
+                        }
+                    elif type == "boolean":
+                        if prop_value == "true":
+                            val_ru = "Да"
+                            val_kz = "Иә"
+                        elif prop_value == "false":
+                            val_ru = "Нет"
+                            val_kz = "Жоқ"
+
+                        value_i18n = {
+                            "ru": val_ru,
+                            "kz": val_kz,
+                        }
                 products_res.append(
                     {
                         "id": product.get("id"),
                         "slug": product.get("slug"),
                         "name_i18n": product.get("name_i18n", {}),
                         "main_image_url": product.get("main_image_url"),
-                        "property": {
-                            "value_i18n": {
-                                "ru": f"{val_ru} {m_unit_ru}".strip(),
-                                "kz": f"{val_kz} {m_unit_kz}".strip(),
-                            }
-                        },
+                        "property": {"value_i18n": value_i18n},
                     }
                 )
 
@@ -327,7 +342,6 @@ class DocumentProduct:
                     "products": products_res,
                 }
             )
-        logging.info(f"res: {result}")
         return result
 
 

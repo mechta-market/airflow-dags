@@ -499,9 +499,10 @@ def delete_different_data_callable(**context):
         "query": {"match_all": {}},
     }
 
+    scroll_id = Any
     try:
         response = client.search(
-            index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m"
+            index=INDEX_NAME, body=existing_ids_query, size=8000, scroll="2m"
         )
         scroll_id = response["_scroll_id"]
         existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}

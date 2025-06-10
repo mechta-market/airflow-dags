@@ -75,6 +75,9 @@ class DocumentProduct:
 
         self.properties = self._parse_properties(p.get("property_model", {}))
         self.all_properties = self._parse_all_properties(p.get("property_model", {}))
+        self.similar_products = self._parse_similar_products(
+            p.get("similar_products"), []
+        )
 
     def _parse_i18n(self, field_i18n) -> dict:
         return {lang: field_i18n.get(lang, "") for lang in TARGET_LANGUAGES}
@@ -270,6 +273,63 @@ class DocumentProduct:
         transformed = {"groups": result_groups}
         return transformed
 
+    def _parse_similar_products(self, similar_products) -> List[Dict[str, Any]]:
+        result = []
+        for similar_product in similar_products:
+            data = similar_product.get("data", {})
+            options = data.get("options", [])
+            m_unit_i18n = data.get("m_unit_i18n", {})
+
+            # Строим fast lookup для меток
+            label_map = {}
+            for opt in options:
+                if isinstance(opt, dict):
+                    value = opt.get("value", "")
+                    label_map[value] = {
+                        "label_i18n": opt.get("label_i18n", {}),
+                        "m_unit_i18n": m_unit_i18n,
+                    }
+
+            products = similar_product.get("products", [])
+            products_res = []
+            for product in products:
+                product_prop = product.get("property", {})
+                prop_value = product_prop.get("value")
+
+                label_info = label_map[prop_value]
+                label_i18n = label_info.get("label_i18n", {})
+                unit_i18n = label_info.get("m_unit_i18n", {})
+
+                val_ru = label_i18n.get("ru", "")
+                val_kz = label_i18n.get("kz", "")
+                m_unit_ru = unit_i18n.get("ru", "")
+                m_unit_kz = unit_i18n.get("kz", "")
+
+                products_res.append(
+                    {
+                        "id": product.get("id"),
+                        "slug": product.get("slug"),
+                        "name_i18n": product.get("name_i18n", {}),
+                        "main_image_url": product.get("main_image_url"),
+                        "property": {
+                            "value_i18n": {
+                                "ru": f"{val_ru} {m_unit_ru}".strip(),
+                                "kz": f"{val_kz} {m_unit_kz}".strip(),
+                            }
+                        },
+                    }
+                )
+
+            result.append(
+                {
+                    "id": similar_product.get("id"),
+                    "name_i18n": similar_product.get("name_i18n", {}),
+                    "products": products_res,
+                }
+            )
+        logging.info(f"res: {result}")
+        return result
+
 
 def encode_document_product(p: dict) -> dict:
     dp = DocumentProduct(p)
@@ -324,6 +384,7 @@ def extract_data_callable(**context):
             "with_breadcrumbs": True,
             "with_image_urls": True,
             "with_pre_order": True,
+            "with_similar_products": True,
         }
         return fetch_with_retry(url, params=params)
 

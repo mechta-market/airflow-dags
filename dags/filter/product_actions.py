@@ -59,6 +59,7 @@ def fetch_data_callable(**context):
                 logging.error(f"Error loading page {futures[future]}: {e}")
 
     logging.info(f"Fetched data: len={len(all_results)}")
+    logging.info(f"Fetched all_results={all_results}")
     with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False)
 

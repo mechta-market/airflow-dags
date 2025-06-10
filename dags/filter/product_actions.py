@@ -76,18 +76,6 @@ def fetch_data_callable(**context):
 
 
 def delete_previous_data_callable(**context):
-    file_path = context["ti"].xcom_pull(
-        key="data_file_path", task_ids="fetch_data_task"
-    )
-    
-    with open(file_path, "r", encoding="utf-8") as f:
-        items = json.load(f)
-    if not items:
-        return
-    
-    incoming_ids = [item["id"] for item in items if item.get("id") is not None]
-
-    
     hosts = ["http://mdm.default:9200"]
     es_hook = ElasticsearchPythonHook(
         hosts=hosts,
@@ -123,9 +111,8 @@ def delete_previous_data_callable(**context):
 
     
     logging.info(f"existing_ids len = {len(existing_ids)}")
-    logging.info(f"incoming_ids len = {len(incoming_ids)}")
     
-    ids_to_delete = existing_ids - set(incoming_ids)
+    ids_to_delete = existing_ids
     actions = [
         {
             "_op_type": "update",

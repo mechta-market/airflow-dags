@@ -56,7 +56,7 @@ def upsert_to_es_callable(**context):
     client = elastic_conn(Variable.get("elastic_scheme"))
 
     for item in items:
-        doc_id = item.get("id")
+        doc_id = item.get("product_id")
         if not doc_id:
             continue
         client.update(

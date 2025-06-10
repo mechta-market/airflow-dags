@@ -34,7 +34,27 @@ def fetch_data_callable(**context):
         resp.raise_for_status()
         payload = resp.json()
         products = payload.get("products", [])
-        logging.info(f"PAGE={page} CONTENT: {products[0]}")
+        for product in products: 
+            if product.get("id") == "f6dd62bd-5929-11ef-a269-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+            if product.get("id") =="db131aa6-0918-11ef-a265-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+            if product.get("id") =="db131aa9-0918-11ef-a265-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+            if product.get("id") =="db131aab-0918-11ef-a265-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+            if product.get("id") =="13be9d09-4d60-11ef-a267-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+            if product.get("id") =="f6dd62bd-5929-11ef-a269-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+            if product.get("id") =="6a871751-5a02-11ef-a269-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+            if product.get("id") =="0ed57860-6051-11ef-a269-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+            if product.get("id") =="5e49435a-7fb3-11ef-a269-005056b6e990":
+                logging.info(f"PAGE={page} CONTENT: {product}")
+
+                
         
         return products
 
@@ -57,11 +77,10 @@ def fetch_data_callable(**context):
     all_results = initial_payload.get("products", [])
     
     with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {}
-        for page in range(1, 50):
-            logging.info(f"Submitting fetch task for page {page}")
-            futures[executor.submit(fetch_page, page)] = page
-
+        futures = {
+            executor.submit(fetch_page, page): page
+            for page in range(1, total_pages)
+        }
         for future in as_completed(futures):
             try:
                 result = future.result()

@@ -38,7 +38,7 @@ def fetch_data_callable(**context):
     initial_response = requests.get(
         url,
         params={
-                "page": 0,
+                "page": 1,
                 "per_page": page_size,
             },
         timeout=10,
@@ -54,17 +54,21 @@ def fetch_data_callable(**context):
     all_results = initial_payload.get("products", [])
     
     with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {
-            executor.submit(fetch_page, page): page for page in range(1, total_pages)
-        }
+        futures = {}
+        for page in range(1, 50):
+            logging.info(f"Submitting fetch task for page {page}")
+            futures[executor.submit(fetch_page, page)] = page
+
         for future in as_completed(futures):
             try:
-                all_results.extend(future.result())
+                result = future.result()
+                logging.info(f"Page {futures[future]} loaded with {len(result)} items")
+                all_results.extend(result)
             except Exception as e:
                 logging.error(f"Error loading page {futures[future]}: {e}")
 
+
     logging.info(f"Fetched data: len={len(all_results)}")
-    logging.info(f"Fetched all_results={all_results}")
     with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False)
 

@@ -50,7 +50,7 @@ def fetch_data_callable(**context):
 
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
-            executor.submit(fetch_page, page): page for page in range(total_pages)
+            executor.submit(fetch_page, page): page for page in range(5)
         }
         for future in as_completed(futures):
             try:
@@ -61,7 +61,7 @@ def fetch_data_callable(**context):
     logging.info(f"Fetched data: len={len(all_results)}")
     with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False)
-    logging.info(f"all_results: {all_results}")
+
     logging.info(f"Data saved to {DATA_FILE_PATH}")
     context["ti"].xcom_push(key="data_file_path", value=DATA_FILE_PATH)
 

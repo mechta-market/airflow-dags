@@ -67,7 +67,7 @@ def upsert_to_es_callable(**context):
             "doc_as_upsert": True,
         }
         for item in items
-        if item.get("id")
+        if item.get("product_id")
     ]
     logging.info(f"ACTIONS COUNT {len(actions)}.")
 

@@ -172,8 +172,13 @@ def upsert_to_es_callable(**context):
 
     try:
         success, errors = helpers.bulk(
-            client, actions, refresh="wait_for", stats_only=False
-        )
+            client, 
+            actions, 
+            refresh="wait_for", 
+            stats_only=False, 
+            raise_on_error=False, 
+            raise_on_exception=False,
+            )
         logging.info(f"Successfully updated {success} documents.")
         if errors:
             logging.error(f"Errors encountered: {errors}")

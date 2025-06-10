@@ -61,7 +61,7 @@ def fetch_data_callable(**context):
     logging.info(f"Fetched data: len={len(all_results)}")
     with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False)
-
+    logging.info(f"all_results: {all_results}")
     logging.info(f"Data saved to {DATA_FILE_PATH}")
     context["ti"].xcom_push(key="data_file_path", value=DATA_FILE_PATH)
 

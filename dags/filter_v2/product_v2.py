@@ -418,7 +418,7 @@ def extract_data_callable(**context):
     product_ids: List[str] = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {executor.submit(fetch_page, page): page for page in range(2)}
+        futures = {executor.submit(fetch_page, page): page for page in range(total_pages)}
         for f in as_completed(futures):
             page = futures[f]
             try:

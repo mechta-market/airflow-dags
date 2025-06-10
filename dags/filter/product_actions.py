@@ -37,6 +37,10 @@ def fetch_data_callable(**context):
 
     initial_response = requests.get(
         url,
+        params={
+                "page": 0,
+                "per_page": page_size,
+            },
         timeout=10,
     )
     initial_response.raise_for_status()
@@ -44,13 +48,14 @@ def fetch_data_callable(**context):
     total_count = int(initial_payload.get("meta", {}).get("total", 0))
     # total_pages = int(initial_payload.get("meta", {}).get("last_page", 0))
     total_pages = (total_count + page_size - 1) // page_size
+    logging.info(f"total_pages = {total_pages}")
     logging.info(f"initial_response data: len={len(initial_payload.get("products"))}, meta= {initial_payload.get("meta")}")
 
-    all_results = []
-
+    all_results = initial_payload.get("products", [])
+    
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {
-            executor.submit(fetch_page, page): page for page in range(5)
+            executor.submit(fetch_page, page): page for page in range(1, total_pages)
         }
         for future in as_completed(futures):
             try:

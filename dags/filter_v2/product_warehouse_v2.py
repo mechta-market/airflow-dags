@@ -333,7 +333,7 @@ with DAG(
     default_args=default_args,
     description="DAG to upload product_warehouses data from Store service to Elasticsearch index",
     start_date=datetime(2025, 6, 10, 0, 10),
-    schedule="*/15 * * * *",
+    schedule="*/10 * * * *",
     max_active_runs=1,
     catchup=False,
     tags=["nsi", "elasticsearch", "store"],

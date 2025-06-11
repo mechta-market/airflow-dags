@@ -526,7 +526,7 @@ with DAG(
     default_args=default_args,
     description="DAG to upload product_price data from Price service to Elasticsearch index",
     start_date=datetime(2025, 6, 10),
-    schedule="45 * * * *",
+    schedule="30 * * * *",
     max_active_runs=1,
     catchup=False,
     tags=["nsi", "elasticsearch", "price"],

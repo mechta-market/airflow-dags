@@ -553,6 +553,7 @@ def load_data_callable(**context):
         if product.get("id")
     ]
 
+
     try:
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
@@ -584,7 +585,7 @@ with DAG(
     default_args=default_args,
     description="DAG to upload products from NSI service to Elasticsearch index",
     start_date=datetime(2025, 5, 22),
-    schedule="0 * * * *",
+    schedule="15 * * * *",
     max_active_runs=1,
     catchup=False,
     tags=["elasticsearch", "nsi"],

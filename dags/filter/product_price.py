@@ -215,7 +215,7 @@ def transform_base_price_callable(**context):
         task_id="get_city_task",
     )
 
-    MAX_WORKERS = 3
+    MAX_WORKERS = 2
     BATCH_SIZE = 100
     BASE_URL = Variable.get("price_host")
 
@@ -228,7 +228,7 @@ def transform_base_price_callable(**context):
         # 1
         response = requests.get(
             f"{BASE_URL}/base_price/{product_id}",
-            timeout=10,
+            timeout=80,
         )
         if response.status_code == 400:
             if response.json().get("code") == ERR_NO_ROWS:
@@ -244,7 +244,7 @@ def transform_base_price_callable(**context):
                 "list_params.page_size": 1000,
                 "product_id": product_id,
             },
-            timeout=60,
+            timeout=80,
         )
         response.raise_for_status()
         data = response.json()
@@ -324,7 +324,7 @@ def transform_final_price_callable(**context):
     )
 
     BASE_URL = Variable.get("price_host")
-    MAX_WORKERS = 3
+    MAX_WORKERS = 2
     BATCH_SIZE = 100
 
     product_final_price_dict: Dict[str, List[Dict[str, Any]]] = {}
@@ -336,7 +336,7 @@ def transform_final_price_callable(**context):
         # 1
         response = requests.get(
             f"{BASE_URL}/final_price/{product_id}",
-            timeout=10,
+            timeout=80,
         )
         if response.status_code == 400:
             if response.json().get("code") == ERR_NO_ROWS:
@@ -352,7 +352,7 @@ def transform_final_price_callable(**context):
                 "list_params.page_size": 1000,
                 "product_id": product_id,
             },
-            timeout=60,
+            timeout=80,
         )
         response.raise_for_status()
         data = response.json()
@@ -524,9 +524,8 @@ def check_errors_callable(**context):
     dag_run = context["dag_run"]
 
     failed_tasks = [
-        ti.task_id
-        for ti in dag_run.get_task_instance()
-        if ti.state == State.FAILED and ti.task_id != context["task"].task_id
+        ti.task_id for ti in dag_run.get_task_instances()
+        if ti.state == State.FAILED and ti.task_id != context['task_instance'].task_id
     ]
 
     if failed_tasks:

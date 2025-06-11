@@ -83,7 +83,8 @@ def get_product_ids_callable(**context):
             client.clear_scroll(scroll_id=scroll_id)
 
     product_ids = list(existing_ids)
-
+    logging.error(f"product ids len ={len(product_ids)}")
+    
     save_data_to_tmp_file(
         context=context,
         xcom_key="product_ids_file_path",

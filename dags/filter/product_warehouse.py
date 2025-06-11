@@ -27,7 +27,7 @@ default_args = {
 
 # Constants
 
-INDEX_NAME = "product"
+INDEX_NAME = "product_v2"
 
 # Configurations
 

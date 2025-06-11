@@ -16,6 +16,7 @@ from filter.utils import (
     clean_tmp_file,
     load_data_from_tmp_file,
     save_data_to_tmp_file,
+    check_errors_callable,
 )
 from helpers.utils import elastic_conn
 
@@ -418,7 +419,9 @@ def extract_data_callable(**context):
     product_ids: List[str] = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {executor.submit(fetch_page, page): page for page in range(total_pages)}
+        futures = {
+            executor.submit(fetch_page, page): page for page in range(total_pages)
+        }
         for f in as_completed(futures):
             page = futures[f]
             try:
@@ -632,10 +635,18 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
+    check_errors = PythonOperator(
+        task_id="check_errors_task",
+        python_callable=check_errors_callable,
+        provide_context=True,
+        trigger_rule=TriggerRule.ALL_DONE,
+    )
+
     (
         extract_data
         >> transform_data
         >> delete_different_data
         >> load_data
         >> cleanup_temp_files
+        >> check_errors
     )

@@ -13,9 +13,13 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
-from airflow.utils.state import State
 
-from filter.utils import clean_tmp_file, load_data_from_tmp_file, save_data_to_tmp_file, check_errors_callable
+from filter.utils import (
+    clean_tmp_file,
+    load_data_from_tmp_file,
+    save_data_to_tmp_file,
+    check_errors_callable,
+)
 from helpers.utils import elastic_conn
 
 

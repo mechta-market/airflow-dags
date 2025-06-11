@@ -12,7 +12,12 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import clean_tmp_file, load_data_from_tmp_file, save_data_to_tmp_file
+from filter.utils import (
+    clean_tmp_file,
+    load_data_from_tmp_file,
+    save_data_to_tmp_file,
+    check_errors_callable,
+)
 from helpers.utils import elastic_conn
 
 # DAG parameters
@@ -84,7 +89,7 @@ def get_product_ids_callable(**context):
 
     product_ids = list(existing_ids)
     logging.info(f"product ids len ={len(product_ids)}")
-    
+
     save_data_to_tmp_file(
         context=context,
         xcom_key="product_ids_file_path",
@@ -380,10 +385,18 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
+    check_errors = PythonOperator(
+        task_id="check_errors_task",
+        python_callable=check_errors_callable,
+        provide_context=True,
+        trigger_rule=TriggerRule.ALL_DONE,
+    )
+
     (
         get_product_ids
         >> [get_warehouse, get_city_warehouse]
         >> transform_data
         >> load_data
         >> cleanup_temp_files
+        >> check_errors
     )

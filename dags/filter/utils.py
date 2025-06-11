@@ -10,11 +10,12 @@ import requests
 
 # Constants
 
-REQUEST_MAX_RETRIES=3
-REQUEST_RETRY_DELAY=1
-REQUEST_TIMEOUT=60
+REQUEST_MAX_RETRIES = 3
+REQUEST_RETRY_DELAY = 1
+REQUEST_TIMEOUT = 60
 
 # Functions
+
 
 def fetch_with_retry(url: str, params=None, retries=REQUEST_MAX_RETRIES):
     for attempt in range(retries):
@@ -28,6 +29,7 @@ def fetch_with_retry(url: str, params=None, retries=REQUEST_MAX_RETRIES):
             else:
                 raise
 
+
 def clean_tmp_file(file_path: str):
     if file_path == "" or file_path is None:
         return
@@ -37,6 +39,7 @@ def clean_tmp_file(file_path: str):
         logging.info(f"clean_tmp_file: file removed: {file_path}")
     else:
         logging.info(f"clean_tmp_file: file not found: {file_path}")
+
 
 def load_data_from_tmp_file(context, xcom_key: str, task_id: str) -> Any:
     file_path = context["ti"].xcom_pull(key=xcom_key, task_ids=task_id)
@@ -53,7 +56,8 @@ def load_data_from_tmp_file(context, xcom_key: str, task_id: str) -> Any:
 
     return data
 
-def save_data_to_tmp_file(context, xcom_key:str, data: Any, file_path: str):
+
+def save_data_to_tmp_file(context, xcom_key: str, data: Any, file_path: str):
     try:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
@@ -62,6 +66,7 @@ def save_data_to_tmp_file(context, xcom_key:str, data: Any, file_path: str):
         raise
 
     context["ti"].xcom_push(key=xcom_key, value=file_path)
+
 
 def check_errors_callable(**context):
     dag_run = context["dag_run"]

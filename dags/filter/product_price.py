@@ -15,7 +15,7 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.utils.state import State
 
-from filter.utils import clean_tmp_file, load_data_from_tmp_file, save_data_to_tmp_file
+from filter.utils import clean_tmp_file, load_data_from_tmp_file, save_data_to_tmp_file, check_errors_callable
 from helpers.utils import elastic_conn
 
 
@@ -519,22 +519,6 @@ def cleanup_temp_files_callable(**context):
         if file_path:
             clean_tmp_file(file_path)
 
-
-def check_errors_callable(**context):
-    dag_run = context["dag_run"]
-
-    failed_tasks = [
-        ti.task_id for ti in dag_run.get_task_instances()
-        if ti.state == State.FAILED and ti.task_id != context['task_instance'].task_id
-    ]
-
-    if failed_tasks:
-        error_msg = f"DAG finished with failed tasks: {', '.join(failed_tasks)}"
-        logging.error(error_msg)
-        raise
-
-
-# DAG
 
 with DAG(
     dag_id=DAG_ID,

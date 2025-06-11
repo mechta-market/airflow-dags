@@ -13,6 +13,7 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.utils.state import State
 
 from filter.utils import clean_tmp_file, load_data_from_tmp_file, save_data_to_tmp_file
 from helpers.utils import elastic_conn
@@ -519,6 +520,21 @@ def cleanup_temp_files_callable(**context):
             clean_tmp_file(file_path)
 
 
+def check_errors_callable(**context):
+    dag_run = context["dag_run"]
+
+    failed_tasks = [
+        ti.task_id
+        for ti in dag_run.get_task_instance()
+        if ti.state == State.FAILED and ti.task_id != context["task"].task_id
+    ]
+
+    if failed_tasks:
+        error_msg = f"DAG finished with failed tasks: {', '.join(failed_tasks)}"
+        logging.error(error_msg)
+        raise
+
+
 # DAG
 
 with DAG(
@@ -586,7 +602,14 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
+    check_errors = PythonOperator(
+        task_id="check_errors_task",
+        python_callable=check_errors_callable,
+        provide_context=True,
+        trigger_rule=TriggerRule.ALL_DONE,
+    )
+
     get_product_ids >> [get_city, get_subdivision]
     get_city >> transform_base_price >> load_base_price
     get_subdivision >> transform_final_price >> load_final_price
-    [load_base_price, load_final_price] >> cleanup_temp_files
+    [load_base_price, load_final_price] >> cleanup_temp_files >> check_errors

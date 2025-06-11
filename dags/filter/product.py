@@ -596,7 +596,7 @@ with DAG(
     schedule="0 * * * *",
     max_active_runs=1,
     catchup=False,
-    tags=["elasticsearch", "nsi"],
+    tags=["elasticsearch", "nsi", "product"],
 ) as dag:
     extract_data = PythonOperator(
         task_id="extract_data_task",

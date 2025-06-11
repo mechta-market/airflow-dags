@@ -97,7 +97,7 @@ with DAG(
     schedule_interval="15 * * * *",
     start_date=datetime(2025, 5, 14),
     catchup=False,
-    tags=["1c", "elasticsearch"],
+    tags=["1c", "elasticsearch", "product"],
 ) as dag:
 
     fetch_data = PythonOperator(

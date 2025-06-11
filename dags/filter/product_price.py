@@ -529,7 +529,7 @@ with DAG(
     schedule="30 * * * *",
     max_active_runs=1,
     catchup=False,
-    tags=["nsi", "elasticsearch", "price"],
+    tags=["nsi", "elasticsearch", "price", "product"],
 ) as dag:
     get_product_ids = PythonOperator(
         task_id="get_product_ids_task",

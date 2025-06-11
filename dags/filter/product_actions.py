@@ -13,9 +13,10 @@ from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPyt
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
+DAG_ID = "product_actions"
 
-INDEX_NAME = "product_v1"
-DATA_FILE_PATH = "/tmp/product_action_site.json"
+INDEX_NAME = "product_v2"
+DATA_FILE_PATH = f"/tmp/{DAG_ID}.product_action_site.json"
 
 
 def fetch_data_callable(**context):
@@ -208,7 +209,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id=f"product_actions",
+    dag_id=DAG_ID,
     default_args=default_args,
     schedule_interval="*/60 * * * *",
     start_date=datetime(2025, 5, 27),

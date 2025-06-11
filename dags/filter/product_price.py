@@ -30,7 +30,7 @@ default_args = {
 
 # Constants
 
-INDEX_NAME = "product_v1"
+INDEX_NAME = "product_v2"
 
 ASTANA_CITY_ID = "cc4316f8-4333-11ea-a22d-005056b6dbd7"
 ASTANA_OFFICE_SUBDIVISION_ID = "3bd9bf4f-7dd7-11e8-a213-005056b6dbd7"
@@ -525,7 +525,7 @@ with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
     description="DAG to upload product_price data from Price service to Elasticsearch index",
-    start_date=datetime(2025, 5, 22),
+    start_date=datetime(2025, 6, 10),
     schedule="30 * * * *",
     max_active_runs=1,
     catchup=False,

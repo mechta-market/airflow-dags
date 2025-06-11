@@ -27,7 +27,7 @@ default_args = {
 
 # Constants
 
-INDEX_NAME = "product_v1"
+INDEX_NAME = "product"
 
 # Configurations
 
@@ -83,7 +83,8 @@ def get_product_ids_callable(**context):
             client.clear_scroll(scroll_id=scroll_id)
 
     product_ids = list(existing_ids)
-
+    logging.info(f"product ids len ={len(product_ids)}")
+    
     save_data_to_tmp_file(
         context=context,
         xcom_key="product_ids_file_path",
@@ -332,7 +333,7 @@ with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
     description="DAG to upload product_warehouses data from Store service to Elasticsearch index",
-    start_date=datetime(2025, 5, 22, 0, 5),
+    start_date=datetime(2025, 6, 10, 0, 10),
     schedule="*/10 * * * *",
     max_active_runs=1,
     catchup=False,

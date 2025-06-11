@@ -13,9 +13,10 @@ from airflow.operators.python_operator import PythonOperator
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
+DAG_ID = "product_provider"
 
 DICTIONARY_NAME = "product"
-INDEX_NAME = "product_v1"
+INDEX_NAME = "product_v2"
 
 
 def fetch_data_callable(**context) -> None:
@@ -91,7 +92,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id="product_provider",
+    dag_id=DAG_ID,
     default_args=default_args,
     schedule_interval="15 * * * *",
     start_date=datetime(2025, 5, 14),

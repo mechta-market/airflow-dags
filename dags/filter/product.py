@@ -31,7 +31,7 @@ default_args = {
 
 # Constants
 
-INDEX_NAME = "product_v1"
+INDEX_NAME = "product_v2"
 
 DEFAULT_LANGUAGE = "ru"
 TARGET_LANGUAGES = ["ru", "kz"]
@@ -48,6 +48,8 @@ class DocumentProduct:
         self.id = p.get("id", "")
         self.code = p.get("code", "")
         self.slug = p.get("slug", "")
+        self.prev_slug = p.get("prev_slug", [])
+
         self.created_at = p.get("created_at")
 
         self.type = p.get("type", 0)
@@ -69,18 +71,25 @@ class DocumentProduct:
         self.description_i18n = self._parse_i18n(p.get("description_i18n", {}))
 
         self.image_urls = p.get("image_urls", [])
+        self.video_urls = self._parse_video_urls(p.get("video", {}))
 
         self.categories = self._parse_categories(p.get("breadcrumbs", []))
-        self.pre_order = self._parse_preorder(p.get("pre_order", None))
+        self.pre_order = self._parse_pre_order(p.get("pre_order", None))
 
         self.properties = self._parse_properties(p.get("property_model", {}))
         self.all_properties = self._parse_all_properties(p.get("property_model", {}))
         self.similar_products = self._parse_similar_products(
-            p.get("similar_products", []),
+            p.get("similar_products", [])
         )
 
     def _parse_i18n(self, field_i18n) -> dict:
         return {lang: field_i18n.get(lang, "") for lang in TARGET_LANGUAGES}
+
+    def _parse_video_urls(self, obj) -> List[str]:
+        if not obj:
+            return []
+
+        return obj.get("data", [])
 
     def _parse_categories(self, breadcrumbs) -> List[dict]:
         categories = []
@@ -97,7 +106,7 @@ class DocumentProduct:
             )
         return categories
 
-    def _parse_preorder(self, pre_order) -> dict:
+    def _parse_pre_order(self, pre_order) -> dict:
         if not pre_order:
             return None
         return {
@@ -397,6 +406,7 @@ def extract_data_callable(**context):
             "with_properties": True,
             "with_breadcrumbs": True,
             "with_image_urls": True,
+            "with_video": True,
             "with_pre_order": True,
             "with_similar_products": True,
         }
@@ -408,9 +418,7 @@ def extract_data_callable(**context):
     product_ids: List[str] = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {
-            executor.submit(fetch_page, page): page for page in range(total_pages)
-        }
+        futures = {executor.submit(fetch_page, page): page for page in range(total_pages)}
         for f in as_completed(futures):
             page = futures[f]
             try:
@@ -491,9 +499,10 @@ def delete_different_data_callable(**context):
         "query": {"match_all": {}},
     }
 
+    scroll_id = Any
     try:
         response = client.search(
-            index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m"
+            index=INDEX_NAME, body=existing_ids_query, size=5000, scroll="2m"
         )
         scroll_id = response["_scroll_id"]
         existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
@@ -553,7 +562,6 @@ def load_data_callable(**context):
         if product.get("id")
     ]
 
-
     try:
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
@@ -584,8 +592,8 @@ with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
     description="DAG to upload products from NSI service to Elasticsearch index",
-    start_date=datetime(2025, 5, 22),
-    schedule="15 * * * *",
+    start_date=datetime(2025, 6, 10),
+    schedule="0 * * * *",
     max_active_runs=1,
     catchup=False,
     tags=["elasticsearch", "nsi"],

@@ -7,7 +7,6 @@ from airflow.operators.python_operator import PythonOperator
 
 
 DICTIONARY_NAME = "product_category"
-INDEX_NAME = f"{DICTIONARY_NAME}_nsi"
 
 
 def fetch_data_callable(**context):
@@ -28,7 +27,7 @@ def upsert_to_es_callable(**context):
         if not doc_id:
             continue
         client.update(
-            index=INDEX_NAME,
+            index=DICTIONARY_NAME,
             id=doc_id,
             body={"doc": item, "doc_as_upsert": True},
         )
@@ -40,7 +39,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id=f"{DICTIONARY_NAME}_nsi",
+    dag_id=DICTIONARY_NAME,
     default_args=default_args,
     schedule_interval="45 * * * *",
     start_date=datetime(2025, 5, 14),

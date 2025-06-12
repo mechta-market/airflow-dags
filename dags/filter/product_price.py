@@ -29,8 +29,8 @@ DAG_ID = "product_price"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=3),
+    # "retries": 1,
+    # "retry_delay": timedelta(minutes=5),
 }
 
 # Constants
@@ -219,7 +219,7 @@ def transform_base_price_callable(**context):
         task_id="get_city_task",
     )
 
-    MAX_WORKERS = 2
+    MAX_WORKERS = 1
     BATCH_SIZE = 100
     BASE_URL = Variable.get("price_host")
 
@@ -328,7 +328,7 @@ def transform_final_price_callable(**context):
     )
 
     BASE_URL = Variable.get("price_host")
-    MAX_WORKERS = 2
+    MAX_WORKERS = 1
     BATCH_SIZE = 100
 
     product_final_price_dict: Dict[str, List[Dict[str, Any]]] = {}

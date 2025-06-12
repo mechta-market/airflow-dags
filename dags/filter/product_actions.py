@@ -73,12 +73,12 @@ def fetch_data_callable(**context):
         json.dump(all_results, f, ensure_ascii=False)
 
     logging.info(f"Data saved to {DATA_FILE_PATH}")
-    context["ti"].xcom_push(key="data_file_path", value=DATA_FILE_PATH)
+    context["ti"].xcom_push(key=f"data_file_path_{DAG_ID}", value=DATA_FILE_PATH)
 
 
 def delete_previous_data_callable(**context):
     file_path = context["ti"].xcom_pull(
-        key="data_file_path", task_ids="fetch_data_task"
+        key=f"data_file_path_{DAG_ID}", task_ids="fetch_data_task"
     )
     
     with open(file_path, "r", encoding="utf-8") as f:
@@ -157,7 +157,7 @@ def delete_previous_data_callable(**context):
     
 def upsert_to_es_callable(**context):
     file_path = context["ti"].xcom_pull(
-        key="data_file_path", task_ids="fetch_data_task"
+        key=f"data_file_path_{DAG_ID}", task_ids="fetch_data_task"
     )
 
     if not file_path or not os.path.exists(file_path):

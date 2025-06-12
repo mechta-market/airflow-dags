@@ -11,7 +11,7 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
 
-
+DAG_ID = "node"
 DICTIONARY_NAME = "node"
 NORMALIZE_FIELDS = ["parent_id"]
 
@@ -25,12 +25,14 @@ def fetch_data_callable(**context) -> None:
         )
         return
 
-    context["ti"].xcom_push(key="fetched_data", value=response.get("data"))
+    context["ti"].xcom_push(key=f"fetched_data_{DAG_ID}", value=response.get("data"))
 
 
 def normalize_data_callable(**context) -> None:
     """Нормализация данных перед загрузкой в Elasticsearch."""
-    items = context["ti"].xcom_pull(key="fetched_data", task_ids="fetch_data_task")
+    items = context["ti"].xcom_pull(
+        key=f"fetched_data_{DAG_ID}", task_ids="fetch_data_task"
+    )
     if not items:
         return
 
@@ -50,13 +52,13 @@ def normalize_data_callable(**context) -> None:
 
         normalized.append(normalized_item)
 
-    context["ti"].xcom_push(key="normalized_data", value=normalized)
+    context["ti"].xcom_push(key=f"normalized_data_{DAG_ID}", value=normalized)
 
 
 def upsert_to_es_callable(**context):
     """Загружаем данные в Elasticsearch."""
     items = context["ti"].xcom_pull(
-        key="normalized_data", task_ids="normalize_data_task"
+        key=f"normalized_data_{DAG_ID}", task_ids="normalize_data_task"
     )
     if not items:
         return
@@ -80,7 +82,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id=f"{DICTIONARY_NAME}",
+    dag_id=DAG_ID,
     default_args=default_args,
     schedule_interval="10 * * * *",
     start_date=datetime(2025, 5, 14),

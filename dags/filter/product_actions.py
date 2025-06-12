@@ -152,6 +152,7 @@ def delete_previous_data_callable(**context):
             raise
         
     logging.info(f"Updated {len(ids_to_delete)} fields to empty actions")
+    context["elk_cli"].xcom_push(key="elk_client", value=client)
 
     
     
@@ -171,9 +172,11 @@ def upsert_to_es_callable(**context):
         return
     logging.info(f"items LEN={len(items)}")
 
-    hosts = ["http://mdm.default:9200"]
-    es_hook = ElasticsearchPythonHook(hosts=hosts)
-    client = es_hook.get_conn
+    # hosts = ["http://mdm.default:9200"]
+    # es_hook = ElasticsearchPythonHook(hosts=hosts)
+    # client = es_hook.get_conn
+    
+    client = context["elk_cli"].xcom_pull(key="elk_client", task_ids="delete_previous_data_task")
     
     actions = [
         {
@@ -211,10 +214,11 @@ default_args = {
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    schedule_interval="*/60 * * * *",
+    schedule_interval="0 * * * *",
     start_date=datetime(2025, 5, 27),
     catchup=False,
     tags=["elasticsearch", "site", "product"],
+    description = "Этот DAG переносит информацию о акциях заполняемых на сайте в Elasticearch"
 ) as dag:
 
     fetch_data = PythonOperator(

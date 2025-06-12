@@ -11,8 +11,8 @@ DAG_ID = "cleanup_old_xcoms_daily"
 
 default_args = {
     "owner": "airflow",
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    # "retries": 1,
+    # "retry_delay": timedelta(minutes=5),
 }
 
 

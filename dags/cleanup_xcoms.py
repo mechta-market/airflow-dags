@@ -1,8 +1,9 @@
+import pendulum
+import logging
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.models.xcom import XCom
-from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from airflow.utils.session import provide_session
 
@@ -18,14 +19,15 @@ default_args = {
 
 @provide_session
 def delete_old_xcoms(session: Session = None, **kwargs):
-    cutoff_date = datetime.utcnow() - timedelta(days=2)
+    cutoff_date = pendulum.now("UTC").subtract(days=2)
+    logging.info(f"cutoff_date {cutoff_date}")
     deleted = (
         session.query(XCom)
         .filter(XCom.execution_date < cutoff_date)
         .delete(synchronize_session=False)
     )
     session.commit()
-    print(f"Deleted {deleted} XCom rows older than {cutoff_date}")
+    logging.info(f"Deleted {deleted} XCom rows older than {cutoff_date}")
 
 
 with DAG(

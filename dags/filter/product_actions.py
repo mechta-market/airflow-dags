@@ -152,7 +152,6 @@ def delete_previous_data_callable(**context):
             raise
         
     logging.info(f"Updated {len(ids_to_delete)} fields to empty actions")
-    context["ti"].xcom_push(key="elk_client", value=client)
 
     
     
@@ -172,11 +171,9 @@ def upsert_to_es_callable(**context):
         return
     logging.info(f"items LEN={len(items)}")
 
-    # hosts = ["http://mdm.default:9200"]
-    # es_hook = ElasticsearchPythonHook(hosts=hosts)
-    # client = es_hook.get_conn
-    
-    client = context["ti"].xcom_pull(key="elk_client", task_ids="delete_previous_data_task")
+    hosts = ["http://mdm.default:9200"]
+    es_hook = ElasticsearchPythonHook(hosts=hosts)
+    client = es_hook.get_conn
     
     actions = [
         {

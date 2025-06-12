@@ -19,7 +19,7 @@ default_args = {
 
 @provide_session
 def delete_old_xcoms(session: Session = None, **kwargs):
-    cutoff_date = pendulum.now("UTC").subtract(days=2)
+    cutoff_date = pendulum.now("UTC").subtract(hours=1)
     logging.info(f"cutoff_date {cutoff_date}")
     deleted = (
         session.query(XCom)

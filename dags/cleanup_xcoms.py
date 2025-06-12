@@ -19,7 +19,11 @@ default_args = {
 @provide_session
 def delete_old_xcoms(session: Session = None, **kwargs):
     cutoff_date = datetime.utcnow() - timedelta(days=2)
-    deleted = session.query(XCom).filter(XCom.execution_date < cutoff_date).delete()
+    deleted = (
+        session.query(XCom)
+        .filter(XCom.execution_date < cutoff_date)
+        .delete(synchronize_session=False)
+    )
     session.commit()
     print(f"Deleted {deleted} XCom rows older than {cutoff_date}")
 

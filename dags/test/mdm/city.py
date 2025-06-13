@@ -139,7 +139,6 @@ def upsert_city_ids_in_warehouse_callable(**context):
                 "_index": WAREHOUSE_INDEX_NAME,
                 "_id": warehouse_id,
                 "doc": {"city_ids": list(city_ids)},
-                "doc_as_upsert": True,  # optional: creates if not exists
             }
         )
 
@@ -147,7 +146,12 @@ def upsert_city_ids_in_warehouse_callable(**context):
     if actions:
         try:
             success, errors = helpers.bulk(
-                client, actions, refresh="wait_for", stats_only=False
+                client, 
+                actions, 
+                refresh="wait_for", 
+                stats_only=False,
+                raise_on_error=False,
+                raise_on_exception=False,
             )
             logging.info(f"Successfully updated {success} documents.")
             if errors:

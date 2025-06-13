@@ -10,6 +10,7 @@ from helpers.utils import (
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python_operator import PythonOperator
+from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchHook
 
 
 DAG_ID = "organisation"
@@ -54,8 +55,10 @@ def upsert_to_es_callable(**context):
     if not items:
         return
 
-    client = elastic_conn(Variable.get("elastic_scheme"))
-
+    # client = elastic_conn(Variable.get("elastic_scheme"))
+    es_hook = ElasticsearchHook(elasticsearch_conn_id="elasticsearch_default")
+    client = es_hook.get_conn()  # это уже клиент elasticsearch.Elasticsearch
+    logging.info(f"client: {client.info()}")
     for item in items:
         doc_id = item.get("id")
         if not doc_id:

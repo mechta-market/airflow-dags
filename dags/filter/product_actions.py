@@ -2,7 +2,9 @@ import os
 import json
 import logging
 import requests
+from typing import Any
 from datetime import datetime
+from helpers.utils import elastic_conn
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from airflow import DAG
@@ -88,15 +90,10 @@ def delete_previous_data_callable(**context):
     
     incoming_ids = [item["id"] for item in items if item.get("id") is not None]
 
-    
-    
-    hosts = ["http://mdm.default:9200"]
-    es_hook = ElasticsearchPythonHook(
-        hosts=hosts,
-    )
-    client = es_hook.get_conn
+    client = elastic_conn(Variable.get("elastic_scheme"))
 
     existing_ids_query = {
+        "_source": ["id"],
         "query": {
             "nested": {
                 "path": "actions",
@@ -106,30 +103,26 @@ def delete_previous_data_callable(**context):
             }
         }
     }
-    
+
+    scroll_id = Any
     try:
-        response = client.search(index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m")
+        response = client.search(
+            index=INDEX_NAME, body=existing_ids_query, size=5000, scroll="2m"
+        )
         scroll_id = response["_scroll_id"]
         existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
-
         while len(response["hits"]["hits"]) > 0:
             response = client.scroll(scroll_id=scroll_id, scroll="2m")
             existing_ids.update(hit["_id"] for hit in response["hits"]["hits"])
-
     except Exception as e:
-        logging.error(f"Failed to fetch existing IDs from Elasticsearch: {e}")
+        logging.error(f"failed to fetch ids from Elasticsearch: {e}")
         raise
     finally:
         if scroll_id:
             client.clear_scroll(scroll_id=scroll_id)
 
-    
-    logging.info(f"existing_ids len = {len(existing_ids)}")
-    logging.info(f"incoming_ids len = {len(incoming_ids)}")
+    ids_to_delete = existing_ids - incoming_ids
 
-    ids_to_delete = existing_ids - set(incoming_ids)
-
-    ids_to_delete = existing_ids
     actions = [
         {
             "_op_type": "update",
@@ -142,7 +135,12 @@ def delete_previous_data_callable(**context):
     
     try:
         success, errors = helpers.bulk(
-            client, actions, refresh="wait_for", stats_only=False
+            client,
+            actions,
+            refresh="wait_for",
+            stats_only=False,
+            raise_on_error=False, 
+            raise_on_exception=False,
         )
         logging.info(f"delete success, deleted document count: {success}")
         if errors:

@@ -121,7 +121,7 @@ def delete_previous_data_callable(**context):
         if scroll_id:
             client.clear_scroll(scroll_id=scroll_id)
 
-    ids_to_delete = existing_ids - incoming_ids
+    ids_to_delete = existing_ids - set(incoming_ids)
 
     actions = [
         {

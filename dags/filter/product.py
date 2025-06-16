@@ -366,7 +366,7 @@ def encode_document_product(p: dict) -> dict:
 def extract_data_callable(**context):
     BASE_URL = Variable.get("nsi_host")
 
-    MAX_WORKERS = 4
+    MAX_WORKERS = 2
     PAGE_SIZE = 1000
 
     def get_total_pages() -> int:
@@ -596,7 +596,7 @@ with DAG(
     default_args=default_args,
     description="DAG to upload products from NSI service to Elasticsearch index",
     start_date=datetime(2025, 6, 10),
-    schedule="0 * * * *",
+    schedule="0 */6 * * *",
     max_active_runs=1,
     catchup=False,
     tags=["elasticsearch", "nsi", "product"],

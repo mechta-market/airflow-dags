@@ -91,6 +91,7 @@ def get_product_ids_callable(**context):
         "query": {"match_all": {}},
     }
 
+    scroll_id = Any
     try:
         response = client.search(
             index=INDEX_NAME, body=existing_ids_query, size=10000, scroll="2m"

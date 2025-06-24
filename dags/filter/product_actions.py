@@ -209,7 +209,7 @@ default_args = {
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    schedule_interval="0 * * * *",
+    schedule_interval="*/10 * * * *",
     start_date=datetime(2025, 5, 27),
     catchup=False,
     tags=["elasticsearch", "site", "product"],

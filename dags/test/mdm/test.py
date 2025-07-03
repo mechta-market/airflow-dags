@@ -24,7 +24,7 @@ default_args = {
 # }
 
 with DAG(
-    dag_id="s3_test",
+    dag_id="test",
     default_args=default_args,
     schedule_interval="*/10 * * * *",
     start_date=datetime(2025, 5, 14),

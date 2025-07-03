@@ -8,7 +8,6 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 def test_s3_conn():
     hook = S3Hook(aws_conn_id="s3")
     client = hook.get_conn()
-    print("Buckets:", client.list_buckets())
     print("Client:", client)
 
 

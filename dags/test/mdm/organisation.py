@@ -36,7 +36,6 @@ def fetch_data_callable(**context) -> None:
     # Загружаем в S3
     s3 = S3Hook(aws_conn_id="s3")
     client = s3.get_conn()
-    logging.info(client.list_buckets())
     s3.load_bytes(
         bytes_data=data_bytes, key=s3_key, bucket_name=BUCKET_NAME, replace=True
     )

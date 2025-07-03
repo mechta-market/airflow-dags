@@ -45,7 +45,7 @@ def normalize_data_callable() -> None:
             continue
         normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
 
-    put_to_s3(data=normalize_data, s3_key=S3_FILE_NAME)
+    put_to_s3(data=normalized, s3_key=S3_FILE_NAME)
 
 
 def upsert_to_es_callable():

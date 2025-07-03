@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime
 from helpers.utils import (
@@ -9,12 +10,14 @@ from helpers.utils import (
 
 from airflow import DAG
 from airflow.models import Variable
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.operators.python_operator import PythonOperator
 
 
 DAG_ID = "organisation"
 DICTIONARY_NAME = "organisation"
 NORMALIZE_FIELDS = []
+BUCKET_NAME = "airflow"
 
 
 def fetch_data_callable(**context) -> None:
@@ -26,14 +29,36 @@ def fetch_data_callable(**context) -> None:
         )
         return
 
-    context["ti"].xcom_push(key=f"fetched_data_{DAG_ID}", value=response.get("data"))
+    data_bytes = json.dumps(response.get("data"), ensure_ascii=False).encode("utf-8")
+
+    s3_key = "1с-data/subdivision.json"
+
+    # Загружаем в S3
+    s3 = S3Hook(aws_conn_id="s3")
+    client = s3.get_conn()
+    logging.info(client.list_buckets())
+    s3.load_bytes(
+        bytes_data=data_bytes, key=s3_key, bucket_name=BUCKET_NAME, replace=True
+    )
+
+    logging.info(f"Data saved to s3://{BUCKET_NAME}/{s3_key}")
+    context["ti"].xcom_push(key=f"s3_key_{DAG_ID}", value=s3_key)
 
 
 def normalize_data_callable(**context) -> None:
     """Нормализация данных перед загрузкой в Elasticsearch."""
-    items = context["ti"].xcom_pull(
-        key=f"fetched_data_{DAG_ID}", task_ids="fetch_data_task"
-    )
+    s3_key = context["ti"].xcom_pull(key=f"s3_key_{DAG_ID}", task_ids="fetch_data_task")
+    if not s3_key:
+        logging.error("No S3 key found in XCom.")
+        return
+
+    s3 = S3Hook(aws_conn_id="s3")
+
+    # Загружаем из S3
+    file_obj = s3.get_key(key=s3_key, bucket_name=BUCKET_NAME)
+    file_content = file_obj.get()["Body"].read()
+    items = json.loads(file_content)
+
     if not items:
         return
 

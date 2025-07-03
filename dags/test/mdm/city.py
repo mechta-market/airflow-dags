@@ -4,6 +4,8 @@ from helpers.utils import (
     elastic_conn,
     request_to_1c,
     normalize_zero_uuid_fields,
+    put_to_s3,
+    get_from_s3,
     ZERO_UUID,
 )
 
@@ -19,9 +21,10 @@ DICTIONARY_NAME = "city"
 WAREHOUSE_INDEX_NAME = "warehouse"
 SUBDIVISION_INDEX_NAME = "subdivision"
 NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
+S3_FILE_NAME = "1с-data/city.json"
 
 
-def fetch_data_callable(**context) -> None:
+def fetch_data_callable() -> None:
     """Получаем данные из 1c и сохраняем в XCom."""
     response = request_to_1c(host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME)
     if not response.get("success", False):
@@ -30,14 +33,13 @@ def fetch_data_callable(**context) -> None:
         )
         return
 
-    context["ti"].xcom_push(key=f"fetched_data_{DAG_ID}", value=response.get("data"))
+    put_to_s3(data=response.get("data"), s3_key=S3_FILE_NAME)
 
 
-def normalize_data_callable(**context) -> None:
+def normalize_data_callable() -> None:
     """Нормализация данных перед загрузкой в Elasticsearch."""
-    items = context["ti"].xcom_pull(
-        key=f"fetched_data_{DAG_ID}", task_ids="fetch_data_task"
-    )
+    items = get_from_s3(s3_key=S3_FILE_NAME)
+
     if not items:
         return
 
@@ -47,13 +49,12 @@ def normalize_data_callable(**context) -> None:
             continue
         normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
 
-    context["ti"].xcom_push(key=f"normalized_data_{DAG_ID}", value=normalized)
+    put_to_s3(data=normalized, s3_key=S3_FILE_NAME)
 
 
-def fetch_data_from_subdivision_callable(**context):
-    items = context["ti"].xcom_pull(
-        key=f"normalized_data_{DAG_ID}", task_ids="normalize_data_task"
-    )
+def fetch_data_from_subdivision_callable():
+    items = get_from_s3(s3_key=S3_FILE_NAME)
+
     if not items:
         return
 
@@ -76,14 +77,13 @@ def fetch_data_from_subdivision_callable(**context):
         if subdivision_id in subdivision_map:
             item["cb_node_id"] = subdivision_map[subdivision_id]
 
-    context["ti"].xcom_push(key="fetched_data_from_subdivision", value=items)
+    put_to_s3(data=items, s3_key=S3_FILE_NAME)
 
 
-def upsert_to_es_callable(**context):
+def upsert_to_es_callable():
     """Загружаем данные в Elasticsearch."""
-    items = context["ti"].xcom_pull(
-        key="fetched_data_from_subdivision", task_ids="fetch_data_from_subdivision_task"
-    )
+    items = get_from_s3(s3_key=S3_FILE_NAME)
+
     if not items:
         return
 
@@ -100,15 +100,9 @@ def upsert_to_es_callable(**context):
         )
 
 
-def upsert_city_ids_in_warehouse_callable(**context):
+def upsert_city_ids_in_warehouse_callable():
     """Загружаем данные в Elasticsearch."""
-    items = context["ti"].xcom_pull(
-        key="fetched_data_from_subdivision", task_ids="fetch_data_from_subdivision_task"
-    )
-    logging.info(f"Pulled items for upsert_city_ids_in_warehouse: {items}")
-    if not items:
-        logging.info("No items found, exiting.")
-        return
+    items = get_from_s3(s3_key=S3_FILE_NAME)
 
     client = elastic_conn(Variable.get("elastic_scheme"))
 
@@ -146,9 +140,9 @@ def upsert_city_ids_in_warehouse_callable(**context):
     if actions:
         try:
             success, errors = helpers.bulk(
-                client, 
-                actions, 
-                refresh="wait_for", 
+                client,
+                actions,
+                refresh="wait_for",
                 stats_only=False,
                 raise_on_error=False,
                 raise_on_exception=False,

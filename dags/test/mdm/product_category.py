@@ -1,5 +1,10 @@
 from datetime import datetime
-from helpers.utils import elastic_conn, request_to_nsi_api
+from helpers.utils import (
+    elastic_conn,
+    request_to_nsi_api,
+    put_to_s3,
+    get_from_s3,
+)
 
 from airflow import DAG
 from airflow.models import Variable
@@ -8,18 +13,18 @@ from airflow.operators.python_operator import PythonOperator
 
 DAG_ID = "product_category"
 DICTIONARY_NAME = "product_category"
+S3_FILE_NAME = "nsi-data/product_category.json"
 
 
-def fetch_data_callable(**context):
+def fetch_data_callable():
     resp = request_to_nsi_api(host=Variable.get("nsi_host"), endpoint=DICTIONARY_NAME)
-    context["ti"].xcom_push(key=f"fetched_data_{DAG_ID}", value=resp.get("results", []))
+    put_to_s3(data=resp.get("results", []), s3_key=S3_FILE_NAME)
 
 
-def upsert_to_es_callable(**context):
+def upsert_to_es_callable():
     """Загружаем данные в Elasticsearch."""
-    items = context["ti"].xcom_pull(
-        key=f"fetched_data_{DAG_ID}", task_ids="fetch_data_task"
-    )
+    items = get_from_s3(s3_key=S3_FILE_NAME)
+
     if not items:
         return
 

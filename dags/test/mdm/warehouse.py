@@ -4,6 +4,8 @@ from helpers.utils import (
     elastic_conn,
     request_to_1c,
     normalize_zero_uuid_fields,
+    put_to_s3,
+    get_from_s3,
     ZERO_UUID,
 )
 
@@ -15,9 +17,10 @@ from airflow.operators.python_operator import PythonOperator
 DAG_ID = "warehouse"
 DICTIONARY_NAME = "warehouse"
 NORMALIZE_FIELDS = ["subdivision_id", "node_id", "zone_grouping_id"]
+S3_FILE_NAME = "1с-data/warehouse.json"
 
 
-def fetch_data_callable(**context) -> None:
+def fetch_data_callable() -> None:
     """Получаем данные из 1c и сохраняем в XCom."""
     response = request_to_1c(host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME)
     if not response.get("success", False):
@@ -26,14 +29,12 @@ def fetch_data_callable(**context) -> None:
         )
         return
 
-    context["ti"].xcom_push(key=f"fetched_data_{DAG_ID}", value=response.get("data"))
+    put_to_s3(data=response.get("data"), s3_key=S3_FILE_NAME)
 
 
-def normalize_data_callable(**context) -> None:
+def normalize_data_callable() -> None:
     """Нормализация данных перед загрузкой в Elasticsearch."""
-    items = context["ti"].xcom_pull(
-        key=f"fetched_data_{DAG_ID}", task_ids="fetch_data_task"
-    )
+    items = get_from_s3(s3_key=S3_FILE_NAME)
     if not items:
         return
 
@@ -43,14 +44,12 @@ def normalize_data_callable(**context) -> None:
             continue
         normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
 
-    context["ti"].xcom_push(key=f"normalized_data_{DAG_ID}", value=normalized)
+    put_to_s3(data=normalized, s3_key=S3_FILE_NAME)
 
 
-def upsert_to_es_callable(**context):
+def upsert_to_es_callable():
     """Загружаем данные в Elasticsearch."""
-    items = context["ti"].xcom_pull(
-        key=f"normalized_data_{DAG_ID}", task_ids="normalize_data_task"
-    )
+    items = get_from_s3(s3_key=S3_FILE_NAME)
     if not items:
         return
 

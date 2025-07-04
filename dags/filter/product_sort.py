@@ -13,8 +13,7 @@ from elasticsearch.helpers import BulkIndexError
 DAG_ID = "product_sort"
 
 INDEX_NAME = "product_v2"
-DATA_FILE_PATH = f"/tmp/{DAG_ID}.product_sort_site.json"
-S3_FILE_NAME = "site-data/product_sort.json"
+S3_FILE_NAME = f"{DAG_ID}/product_sort.json"
 
 
 def fetch_data_callable():

@@ -16,7 +16,7 @@ from elasticsearch.helpers import BulkIndexError
 DAG_ID = "product_actions"
 
 INDEX_NAME = "product_v2"
-S3_FILE_NAME = "site-data/product_actions.json"
+S3_FILE_NAME = f"{DAG_ID}/product_actions.json"
 
 
 

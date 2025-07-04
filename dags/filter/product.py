@@ -1,8 +1,8 @@
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
-from typing import Any, Dict, List
 import requests
+from typing import Any, Dict, List
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from elasticsearch import helpers
 
@@ -13,12 +13,9 @@ from airflow.utils.trigger_rule import TriggerRule
 
 from filter.utils import (
     fetch_with_retry,
-    clean_tmp_file,
-    load_data_from_tmp_file,
-    save_data_to_tmp_file,
     check_errors_callable,
 )
-from helpers.utils import elastic_conn
+from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
 # DAG parameters
 
@@ -36,6 +33,9 @@ INDEX_NAME = "product_v2"
 
 DEFAULT_LANGUAGE = "ru"
 TARGET_LANGUAGES = ["ru", "kz"]
+
+S3_FILE_NAME_EXTRACTED_DATA = f"{DAG_ID}/extracted_data.json"
+S3_FILE_NAME_TRANSFORMED_PRODUCTS = f"{DAG_ID}/transformed_products.json"
 
 # Configurations
 
@@ -363,7 +363,7 @@ def encode_document_product(p: dict) -> dict:
 # Tasks
 
 
-def extract_data_callable(**context):
+def extract_data_callable():
     BASE_URL = Variable.get("nsi_host")
 
     MAX_WORKERS = 2
@@ -444,23 +444,15 @@ def extract_data_callable(**context):
                 logging.error(f"error in processing product details: {e}")
                 raise
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="extract_data_file_path",
-        data=extracted_products,
-        file_path=f"/tmp/{DAG_ID}.extract_data.json",
-    )
+    put_to_s3(data=extracted_products, s3_key=S3_FILE_NAME_EXTRACTED_DATA)
+
     logging.info(f"extracted products count: {len(extracted_products)}")
 
 
-def transform_data_callable(**context):
+def transform_data_callable():
     MAX_WORKERS = 7
 
-    collected_products: List[dict] = load_data_from_tmp_file(
-        context=context,
-        xcom_key="extract_data_file_path",
-        task_id="extract_data_task",
-    )
+    collected_products: List[dict] = get_from_s3(s3_key=S3_FILE_NAME_EXTRACTED_DATA)
 
     transformed_products: List[dict] = []
 
@@ -475,20 +467,14 @@ def transform_data_callable(**context):
                 logging.error(f"Failed to process product: {e}")
                 raise
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="transform_data_file_path",
-        data=transformed_products,
-        file_path=f"/tmp/{DAG_ID}.transform_data.json",
-    )
+    put_to_s3(data=transformed_products, s3_key=S3_FILE_NAME_TRANSFORMED_PRODUCTS)
+
     logging.info(f"transformed products count: {len(transformed_products)}")
 
 
-def delete_different_data_callable(**context):
-    transformed_products: List[dict] = load_data_from_tmp_file(
-        context=context,
-        xcom_key="transform_data_file_path",
-        task_id="transform_data_task",
+def delete_different_data_callable():
+    transformed_products: List[dict] = get_from_s3(
+        s3_key=S3_FILE_NAME_TRANSFORMED_PRODUCTS
     )
     transformed_product_ids = {
         product.get("id") for product in transformed_products if product.get("id")
@@ -543,12 +529,8 @@ def delete_different_data_callable(**context):
             raise
 
 
-def load_data_callable(**context):
-    transformed_products = load_data_from_tmp_file(
-        context,
-        xcom_key="transform_data_file_path",
-        task_id="transform_data_task",
-    )
+def load_data_callable():
+    transformed_products = get_from_s3(s3_key=S3_FILE_NAME_TRANSFORMED_PRODUCTS)
 
     client = elastic_conn(Variable.get("elastic_scheme"))
 
@@ -575,20 +557,6 @@ def load_data_callable(**context):
     except Exception as bulk_error:
         logging.error(f"bulk update failed, error: {bulk_error}")
         raise
-
-
-def cleanup_temp_files_callable(**context):
-    tmp_file_keys = [
-        {"xcom_key": "extract_data_file_path", "task_id": "extract_data_task"},
-        {"xcom_key": "transform_data_file_path", "task_id": "transform_data_task"},
-    ]
-
-    for tmp_file in tmp_file_keys:
-        file_path = context["ti"].xcom_pull(
-            key=tmp_file.get("xcom_key"), task_ids=tmp_file.get("task_id")
-        )
-        if file_path:
-            clean_tmp_file(file_path)
 
 
 with DAG(
@@ -628,13 +596,6 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    cleanup_temp_files = PythonOperator(
-        task_id="cleanup_temp_files_task",
-        python_callable=cleanup_temp_files_callable,
-        provide_context=True,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
-
     check_errors = PythonOperator(
         task_id="check_errors_task",
         python_callable=check_errors_callable,
@@ -647,6 +608,5 @@ with DAG(
         >> transform_data
         >> delete_different_data
         >> load_data
-        >> cleanup_temp_files
         >> check_errors
     )

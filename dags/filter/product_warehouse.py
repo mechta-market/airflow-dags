@@ -1,8 +1,8 @@
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
-from typing import Any, Dict, List
 import requests
+from typing import Any, Dict, List
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
@@ -12,13 +12,8 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import (
-    clean_tmp_file,
-    load_data_from_tmp_file,
-    save_data_to_tmp_file,
-    check_errors_callable,
-)
-from helpers.utils import elastic_conn
+from filter.utils import check_errors_callable
+from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
 # DAG parameters
 
@@ -33,6 +28,11 @@ default_args = {
 # Constants
 
 INDEX_NAME = "product_v2"
+
+S3_FILE_NAME_PRODUCT_IDS = f"{DAG_ID}/product_ids.json"
+S3_FILE_NAME_WAREHOUSE_CITIES = f"{DAG_ID}/warehouse_cities.json"
+S3_FILE_NAME_WAREHOUSES = f"{DAG_ID}/warehouses.json"
+S3_FILE_NAME_PRODUCT_WAREHOUSES = f"{DAG_ID}/product_warehouses.json"
 
 # Configurations
 
@@ -62,7 +62,7 @@ class DocumentWarehouse:
 # Tasks
 
 
-def get_product_ids_callable(**context):
+def get_product_ids_callable():
     client = elastic_conn(Variable.get("elastic_scheme"))
 
     existing_ids_query = {
@@ -91,16 +91,12 @@ def get_product_ids_callable(**context):
     product_ids = list(existing_ids)
     logging.info(f"product ids len ={len(product_ids)}")
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="product_ids_file_path",
-        data=product_ids,
-        file_path=f"/tmp/{DAG_ID}.product_ids.json",
-    )
+    put_to_s3(data=product_ids, s3_key=S3_FILE_NAME_PRODUCT_IDS)
+
     logging.info(f"extracted product_ids count: {len(product_ids)}")
 
 
-def get_warehouse_callable(**context):
+def get_warehouse_callable():
     BASE_URL = Variable.get("nsi_host")
 
     warehouses: List[dict] = []
@@ -134,16 +130,12 @@ def get_warehouse_callable(**context):
 
     warehouses_dict: Dict[str, dict] = {w["id"]: w for w in warehouses if w.get("id")}
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="warehouses_file_path",
-        data=warehouses_dict,
-        file_path=f"/tmp/{DAG_ID}.warehouses.json",
-    )
+    put_to_s3(data=warehouses_dict, s3_key=S3_FILE_NAME_WAREHOUSES)
+
     logging.info(f"extracted warehouses count: {len(warehouses_dict)}")
 
 
-def get_city_warehouse_callable(**context):
+def get_city_warehouse_callable():
     BASE_URL = Variable.get("nsi_host")
 
     city_warehouses: List[dict] = []
@@ -192,31 +184,15 @@ def get_city_warehouse_callable(**context):
                 warehouse_cities_dict[warehouse_id] = []
             warehouse_cities_dict[warehouse_id].append(city_id)
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="warehouse_cities_file_path",
-        data=warehouse_cities_dict,
-        file_path=f"/tmp/{DAG_ID}.warehouse_cities.json",
-    )
+    put_to_s3(data=warehouse_cities_dict, s3_key=S3_FILE_NAME_WAREHOUSE_CITIES)
+
     logging.info(f"extracted city_warehouses count: {len(warehouse_cities_dict)}")
 
 
-def transform_data_callable(**context):
-    product_ids = load_data_from_tmp_file(
-        context=context,
-        xcom_key="product_ids_file_path",
-        task_id="get_product_ids_task",
-    )
-    warehouses_dict = load_data_from_tmp_file(
-        context=context,
-        xcom_key="warehouses_file_path",
-        task_id="get_warehouse_task",
-    )
-    warehouse_cities_dict = load_data_from_tmp_file(
-        context=context,
-        xcom_key="warehouse_cities_file_path",
-        task_id="get_city_warehouse_task",
-    )
+def transform_data_callable():
+    product_ids = get_from_s3(s3_key=S3_FILE_NAME_PRODUCT_IDS)
+    warehouses_dict = get_from_s3(s3_key=S3_FILE_NAME_WAREHOUSES)
+    warehouse_cities_dict = get_from_s3(s3_key=S3_FILE_NAME_WAREHOUSE_CITIES)
 
     MAX_WORKERS = 5
     BATCH_SIZE = 100
@@ -275,21 +251,13 @@ def transform_data_callable(**context):
                     logging.error(f"failed to process product: {e}")
                     raise
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="product_warehouses_file_path",
-        data=dict(product_warehouse_dict),
-        file_path=f"/tmp/{DAG_ID}.product_warehouses.json",
-    )
+    put_to_s3(data=product_warehouse_dict, s3_key=S3_FILE_NAME_PRODUCT_WAREHOUSES)
+
     logging.info(f"transformed product_warehouses count: {len(product_warehouse_dict)}")
 
 
-def load_data_callable(**context):
-    product_warehouses_dict = load_data_from_tmp_file(
-        context=context,
-        xcom_key="product_warehouses_file_path",
-        task_id="transform_data_task",
-    )
+def load_data_callable():
+    product_warehouses_dict = get_from_s3(s3_key=S3_FILE_NAME_PRODUCT_WAREHOUSES)
 
     client = elastic_conn(Variable.get("elastic_scheme"))
 
@@ -314,25 +282,6 @@ def load_data_callable(**context):
     except BulkIndexError as bulk_error:
         logging.error(f"Bulk update failed: {bulk_error}")
         raise
-
-
-def cleanup_temp_files_callable(**context):
-    tmp_file_keys = [
-        {"xcom_key": "product_ids_file_path", "task_id": "get_product_ids_task"},
-        {"xcom_key": "warehouses_file_path", "task_id": "get_warehouse_task"},
-        {
-            "xcom_key": "warehouse_cities_file_path",
-            "task_id": "get_city_warehouse_task",
-        },
-        {"xcom_key": "product_warehouses_file_path", "task_id": "transform_data_task"},
-    ]
-
-    for tmp_file in tmp_file_keys:
-        file_path = context["ti"].xcom_pull(
-            key=tmp_file.get("xcom_key"), task_ids=tmp_file.get("task_id")
-        )
-        if file_path:
-            clean_tmp_file(file_path)
 
 
 with DAG(
@@ -379,13 +328,6 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    cleanup_temp_files = PythonOperator(
-        task_id="cleanup_temp_files_task",
-        python_callable=cleanup_temp_files_callable,
-        provide_context=True,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
-
     check_errors = PythonOperator(
         task_id="check_errors_task",
         python_callable=check_errors_callable,
@@ -398,6 +340,5 @@ with DAG(
         >> [get_warehouse, get_city_warehouse]
         >> transform_data
         >> load_data
-        >> cleanup_temp_files
         >> check_errors
     )

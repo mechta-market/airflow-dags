@@ -21,7 +21,7 @@ DICTIONARY_NAME = "city"
 WAREHOUSE_INDEX_NAME = "warehouse"
 SUBDIVISION_INDEX_NAME = "subdivision"
 NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
-S3_FILE_NAME = "1с-data/city.json"
+S3_FILE_NAME = f"{DAG_ID}/city.json"
 
 
 def fetch_data_callable() -> None:

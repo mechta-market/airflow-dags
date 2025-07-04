@@ -3,7 +3,6 @@ import requests
 from datetime import datetime
 from typing import Any, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from helpers.utils import put_to_s3, get_from_s3
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
@@ -13,13 +12,8 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import (
-    clean_tmp_file,
-    load_data_from_tmp_file,
-    save_data_to_tmp_file,
-    check_errors_callable,
-)
-from helpers.utils import elastic_conn
+from filter.utils import check_errors_callable
+from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
 
 # DAG parameters
@@ -39,11 +33,11 @@ INDEX_NAME = "product_v2"
 ASTANA_CITY_ID = "cc4316f8-4333-11ea-a22d-005056b6dbd7"
 ASTANA_OFFICE_SUBDIVISION_ID = "3bd9bf4f-7dd7-11e8-a213-005056b6dbd7"
 
-S3_FILE_NAME_PRODUCT_IDS = "price-data/product_ids.json"
-S3_FILE_NAME_CITIES = "price-data/cities.json"
-S3_FILE_NAME_SUBDIVISIONS = "price-data/subdivisions.json"
-S3_FILE_NAME_BASE_PRICE = "price-data/base_price.json"
-S3_FILE_NAME_FINAL_PRICE = "price-data/final_price.json"
+S3_FILE_NAME_PRODUCT_IDS = f"{DAG_ID}/product_ids.json"
+S3_FILE_NAME_CITIES = f"{DAG_ID}/cities.json"
+S3_FILE_NAME_SUBDIVISIONS = f"{DAG_ID}/subdivisions.json"
+S3_FILE_NAME_BASE_PRICE = f"{DAG_ID}/base_price.json"
+S3_FILE_NAME_FINAL_PRICE = f"{DAG_ID}/final_price.json"
 
 ERR_NO_ROWS = "err_no_rows"
 
@@ -87,7 +81,7 @@ class DocumentFinalPrice:
 # Tasks
 
 
-def get_product_ids_callable(**context):
+def get_product_ids_callable():
     client = elastic_conn(Variable.get("elastic_scheme"))
 
     existing_ids_query = {
@@ -120,7 +114,7 @@ def get_product_ids_callable(**context):
     logging.info(f"extracted product_ids count: {len(product_ids)}")
 
 
-def get_city_callable(**context):
+def get_city_callable():
     BASE_URL = Variable.get("nsi_host")
 
     cities: List[dict] = []
@@ -159,7 +153,7 @@ def get_city_callable(**context):
     logging.info(f"extracted cities count: {len(cities_dict)}")
 
 
-def get_subdivision_callable(**context):
+def get_subdivision_callable():
     BASE_URL = Variable.get("nsi_host")
 
     subdivisions: List[dict] = []
@@ -201,7 +195,7 @@ def get_subdivision_callable(**context):
     logging.info(f"extracted subdivisions count: {len(subdivisions_dict)}")
 
 
-def transform_base_price_callable(**context):
+def transform_base_price_callable():
     product_ids = get_from_s3(s3_key=S3_FILE_NAME_PRODUCT_IDS)
     cities_dict = get_from_s3(s3_key=S3_FILE_NAME_CITIES)
 
@@ -297,7 +291,7 @@ def transform_base_price_callable(**context):
     )
 
 
-def transform_final_price_callable(**context):
+def transform_final_price_callable():
     product_ids = get_from_s3(s3_key=S3_FILE_NAME_PRODUCT_IDS)
     subdivisions_dict = get_from_s3(s3_key=S3_FILE_NAME_SUBDIVISIONS)
 
@@ -405,7 +399,7 @@ def transform_final_price_callable(**context):
     )
 
 
-def load_base_price_callable(**context):
+def load_base_price_callable():
     product_base_price_dict = get_from_s3(s3_key=S3_FILE_NAME_BASE_PRICE)
 
     client = elastic_conn(Variable.get("elastic_scheme"))
@@ -434,7 +428,7 @@ def load_base_price_callable(**context):
         raise
 
 
-def load_final_price_callable(**context):
+def load_final_price_callable():
     product_final_price_dict = get_from_s3(s3_key=S3_FILE_NAME_FINAL_PRICE)
 
     client = elastic_conn(Variable.get("elastic_scheme"))
@@ -461,29 +455,6 @@ def load_final_price_callable(**context):
     except BulkIndexError as bulk_error:
         logging.error(f"bulk update failed: {bulk_error}")
         raise
-
-
-# def cleanup_temp_files_callable(**context):
-#     tmp_file_keys = [
-#         {"xcom_key": "product_ids_file_path", "task_id": "get_product_ids_task"},
-#         {"xcom_key": "cities_file_path", "task_id": "get_city_task"},
-#         {"xcom_key": "subdivisions_file_path", "task_id": "get_subdivision_task"},
-#         {
-#             "xcom_key": "product_base_price_file_path",
-#             "task_id": "transform_base_price_task",
-#         },
-#         {
-#             "xcom_key": "product_final_price_file_path",
-#             "task_id": "transform_final_price_task",
-#         },
-#     ]
-
-#     for tmp_file in tmp_file_keys:
-#         file_path = context["ti"].xcom_pull(
-#             key=tmp_file.get("xcom_key"), task_ids=tmp_file.get("task_id")
-#         )
-#         if file_path:
-#             clean_tmp_file(file_path)
 
 
 with DAG(
@@ -543,13 +514,6 @@ with DAG(
         provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
-
-    # cleanup_temp_files = PythonOperator(
-    #     task_id="cleanup_temp_files_task",
-    #     python_callable=cleanup_temp_files_callable,
-    #     provide_context=True,
-    #     trigger_rule=TriggerRule.ALL_DONE,
-    # )
 
     check_errors = PythonOperator(
         task_id="check_errors_task",

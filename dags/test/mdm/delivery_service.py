@@ -17,7 +17,7 @@ from airflow.operators.python_operator import PythonOperator
 DAG_ID = "delivery_service"
 DICTIONARY_NAME = "delivery_service"
 NORMALIZE_FIELDS = ["city_id"]
-S3_FILE_NAME = "1с-data/delivery_service.json"
+S3_FILE_NAME = f"{DAG_ID}/delivery_service.json"
 
 
 def fetch_data_callable() -> None:

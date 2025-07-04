@@ -19,7 +19,7 @@ from elasticsearch.helpers import BulkIndexError
 
 DAG_ID = "product_barcode"
 DICTIONARY_NAME = "product_barcode"
-S3_FILE_NAME = "1с-data/product_barcode.json"
+S3_FILE_NAME = f"{DAG_ID}/product_barcode.json"
 
 NORMALIZE_FIELDS = []
 

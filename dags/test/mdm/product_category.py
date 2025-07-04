@@ -13,7 +13,7 @@ from airflow.operators.python_operator import PythonOperator
 
 DAG_ID = "product_category"
 DICTIONARY_NAME = "product_category"
-S3_FILE_NAME = "nsi-data/product_category.json"
+S3_FILE_NAME = f"{DAG_ID}/product_category.json"
 
 
 def fetch_data_callable():

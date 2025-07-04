@@ -1,10 +1,9 @@
-import json
 import logging
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
-from typing import Any, Dict, List
 import requests
+from datetime import datetime
+from typing import Any, Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from helpers.utils import put_to_s3, get_from_s3
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
@@ -39,6 +38,12 @@ INDEX_NAME = "product_v2"
 
 ASTANA_CITY_ID = "cc4316f8-4333-11ea-a22d-005056b6dbd7"
 ASTANA_OFFICE_SUBDIVISION_ID = "3bd9bf4f-7dd7-11e8-a213-005056b6dbd7"
+
+S3_FILE_NAME_PRODUCT_IDS = "price-data/product_ids.json"
+S3_FILE_NAME_CITIES = "price-data/cities.json"
+S3_FILE_NAME_SUBDIVISIONS = "price-data/subdivisions.json"
+S3_FILE_NAME_BASE_PRICE = "price-data/base_price.json"
+S3_FILE_NAME_FINAL_PRICE = "price-data/final_price.json"
 
 ERR_NO_ROWS = "err_no_rows"
 
@@ -110,12 +115,8 @@ def get_product_ids_callable(**context):
 
     product_ids = list(existing_ids)
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="product_ids_file_path",
-        data=product_ids,
-        file_path=f"/tmp/{DAG_ID}.product_ids.json",
-    )
+    put_to_s3(data=product_ids, s3_key=S3_FILE_NAME_PRODUCT_IDS)
+
     logging.info(f"extracted product_ids count: {len(product_ids)}")
 
 
@@ -153,12 +154,8 @@ def get_city_callable(**context):
 
     cities_dict: Dict[str, dict] = {c["id"]: c for c in cities if c.get("id")}
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="cities_file_path",
-        data=cities_dict,
-        file_path=f"/tmp/{DAG_ID}.city.json",
-    )
+    put_to_s3(data=cities_dict, s3_key=S3_FILE_NAME_CITIES)
+
     logging.info(f"extracted cities count: {len(cities_dict)}")
 
 
@@ -199,26 +196,14 @@ def get_subdivision_callable(**context):
         s["id"]: s for s in subdivisions if s.get("id")
     }
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="subdivisions_file_path",
-        data=subdivisions_dict,
-        file_path=f"/tmp/{DAG_ID}.subdivision.json",
-    )
+    put_to_s3(data=subdivisions_dict, s3_key=S3_FILE_NAME_SUBDIVISIONS)
+
     logging.info(f"extracted subdivisions count: {len(subdivisions_dict)}")
 
 
 def transform_base_price_callable(**context):
-    product_ids = load_data_from_tmp_file(
-        context=context,
-        xcom_key="product_ids_file_path",
-        task_id="get_product_ids_task",
-    )
-    cities_dict = load_data_from_tmp_file(
-        context=context,
-        xcom_key="cities_file_path",
-        task_id="get_city_task",
-    )
+    product_ids = get_from_s3(s3_key=S3_FILE_NAME_PRODUCT_IDS)
+    cities_dict = get_from_s3(s3_key=S3_FILE_NAME_CITIES)
 
     MAX_WORKERS = 1
     BATCH_SIZE = 100
@@ -305,28 +290,16 @@ def transform_base_price_callable(**context):
                     logging.error(f"failed to process product_base_price: {e}")
                     raise
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="product_base_price_file_path",
-        data=dict(product_base_price_dict),
-        file_path=f"/tmp/{DAG_ID}.product_base_price.json",
-    )
+    put_to_s3(data=product_base_price_dict, s3_key=S3_FILE_NAME_BASE_PRICE)
+
     logging.info(
         f"transformed product_base_prices count: {len(product_base_price_dict)}"
     )
 
 
 def transform_final_price_callable(**context):
-    product_ids = load_data_from_tmp_file(
-        context=context,
-        xcom_key="product_ids_file_path",
-        task_id="get_product_ids_task",
-    )
-    subdivisions_dict = load_data_from_tmp_file(
-        context=context,
-        xcom_key="subdivisions_file_path",
-        task_id="get_subdivision_task",
-    )
+    product_ids = get_from_s3(s3_key=S3_FILE_NAME_PRODUCT_IDS)
+    subdivisions_dict = get_from_s3(s3_key=S3_FILE_NAME_SUBDIVISIONS)
 
     BASE_URL = Variable.get("price_host")
     MAX_WORKERS = 1
@@ -425,23 +398,15 @@ def transform_final_price_callable(**context):
                     logging.error(f"failed to process product_base_price: {e}")
                     raise
 
-    save_data_to_tmp_file(
-        context=context,
-        xcom_key="product_final_price_file_path",
-        data=dict(product_final_price_dict),
-        file_path=f"/tmp/{DAG_ID}.product_final_price.json",
-    )
+    put_to_s3(data=product_final_price_dict, s3_key=S3_FILE_NAME_FINAL_PRICE)
+
     logging.info(
         f"transformed product_final_prices count: {len(product_final_price_dict)}"
     )
 
 
 def load_base_price_callable(**context):
-    product_base_price_dict = load_data_from_tmp_file(
-        context=context,
-        xcom_key="product_base_price_file_path",
-        task_id="transform_base_price_task",
-    )
+    product_base_price_dict = get_from_s3(s3_key=S3_FILE_NAME_BASE_PRICE)
 
     client = elastic_conn(Variable.get("elastic_scheme"))
 
@@ -470,11 +435,7 @@ def load_base_price_callable(**context):
 
 
 def load_final_price_callable(**context):
-    product_final_price_dict = load_data_from_tmp_file(
-        context=context,
-        xcom_key="product_final_price_file_path",
-        task_id="transform_final_price_task",
-    )
+    product_final_price_dict = get_from_s3(s3_key=S3_FILE_NAME_FINAL_PRICE)
 
     client = elastic_conn(Variable.get("elastic_scheme"))
 
@@ -502,27 +463,27 @@ def load_final_price_callable(**context):
         raise
 
 
-def cleanup_temp_files_callable(**context):
-    tmp_file_keys = [
-        {"xcom_key": "product_ids_file_path", "task_id": "get_product_ids_task"},
-        {"xcom_key": "cities_file_path", "task_id": "get_city_task"},
-        {"xcom_key": "subdivisions_file_path", "task_id": "get_subdivision_task"},
-        {
-            "xcom_key": "product_base_price_file_path",
-            "task_id": "transform_base_price_task",
-        },
-        {
-            "xcom_key": "product_final_price_file_path",
-            "task_id": "transform_final_price_task",
-        },
-    ]
+# def cleanup_temp_files_callable(**context):
+#     tmp_file_keys = [
+#         {"xcom_key": "product_ids_file_path", "task_id": "get_product_ids_task"},
+#         {"xcom_key": "cities_file_path", "task_id": "get_city_task"},
+#         {"xcom_key": "subdivisions_file_path", "task_id": "get_subdivision_task"},
+#         {
+#             "xcom_key": "product_base_price_file_path",
+#             "task_id": "transform_base_price_task",
+#         },
+#         {
+#             "xcom_key": "product_final_price_file_path",
+#             "task_id": "transform_final_price_task",
+#         },
+#     ]
 
-    for tmp_file in tmp_file_keys:
-        file_path = context["ti"].xcom_pull(
-            key=tmp_file.get("xcom_key"), task_ids=tmp_file.get("task_id")
-        )
-        if file_path:
-            clean_tmp_file(file_path)
+#     for tmp_file in tmp_file_keys:
+#         file_path = context["ti"].xcom_pull(
+#             key=tmp_file.get("xcom_key"), task_ids=tmp_file.get("task_id")
+#         )
+#         if file_path:
+#             clean_tmp_file(file_path)
 
 
 with DAG(
@@ -583,12 +544,12 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    cleanup_temp_files = PythonOperator(
-        task_id="cleanup_temp_files_task",
-        python_callable=cleanup_temp_files_callable,
-        provide_context=True,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
+    # cleanup_temp_files = PythonOperator(
+    #     task_id="cleanup_temp_files_task",
+    #     python_callable=cleanup_temp_files_callable,
+    #     provide_context=True,
+    #     trigger_rule=TriggerRule.ALL_DONE,
+    # )
 
     check_errors = PythonOperator(
         task_id="check_errors_task",
@@ -600,4 +561,4 @@ with DAG(
     get_product_ids >> [get_city, get_subdivision]
     get_city >> transform_base_price >> load_base_price
     get_subdivision >> transform_final_price >> load_final_price
-    [load_base_price, load_final_price] >> cleanup_temp_files >> check_errors
+    [load_base_price, load_final_price] >> check_errors

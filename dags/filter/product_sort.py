@@ -1,8 +1,6 @@
-import os
-import json
 import logging
 from datetime import datetime
-from helpers.utils import request_to_site_api
+from helpers.utils import request_to_site_api, put_to_s3, get_from_s3
 
 from airflow import DAG
 from airflow.models import Variable
@@ -16,30 +14,18 @@ DAG_ID = "product_sort"
 
 INDEX_NAME = "product_v2"
 DATA_FILE_PATH = f"/tmp/{DAG_ID}.product_sort_site.json"
+S3_FILE_NAME = "site-data/product_sort.json"
 
 
-def fetch_data_callable(**context):
+def fetch_data_callable():
     response = request_to_site_api(
         host=Variable.get("site_api_host"), endpoint="v2/airflow/product/sort"
     )
-    with open(DATA_FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(response.get("products"), f, ensure_ascii=False)
-
-    logging.info(f"Data saved to {DATA_FILE_PATH}")
-    context["ti"].xcom_push(key=f"data_file_path_{DAG_ID}", value=DATA_FILE_PATH)
+    put_to_s3(data=response.get("products"), s3_key=S3_FILE_NAME)
 
 
-def upsert_to_es_callable(**context):
-    file_path = context["ti"].xcom_pull(
-        key=f"data_file_path_{DAG_ID}", task_ids="fetch_data_task"
-    )
-
-    if not file_path or not os.path.exists(file_path):
-        logging.info("Data file not found.")
-        return
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        items = json.load(f)
+def upsert_to_es_callable():
+    items = get_from_s3(s3_key=S3_FILE_NAME)
 
     if not items:
         return

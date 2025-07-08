@@ -123,7 +123,7 @@ def upsert_city_ids_in_warehouse_callable():
     for warehouse_id, city_ids in warehouse_city_ids.items():
         if not warehouse_id or not city_ids:
             logging.info(
-                f"warehouse_id or city_ids is empty: wid: {warehouse_id}, cids: {city_id}"
+                f"warehouse_id or city_ids is empty: wid: {warehouse_id}, cids: {city_ids}"
             )
             continue
 
@@ -136,6 +136,7 @@ def upsert_city_ids_in_warehouse_callable():
             }
         )
 
+    logging.info(f"ACTIONS: {actions}.")
     logging.info(f"ACTIONS COUNT {len(actions)}.")
     if actions:
         try:

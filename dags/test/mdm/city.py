@@ -63,7 +63,7 @@ def fetch_data_from_subdivision_callable():
     query = {"query": {"match_all": {}}}
 
     response = client.search(
-        index=SUBDIVISION_INDEX_NAME, body=query, size=100, scroll="2m"
+        index=SUBDIVISION_INDEX_NAME, body=query, size=500, scroll="2m"
     )
 
     subdivision_node_map = {}

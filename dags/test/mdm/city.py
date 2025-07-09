@@ -76,7 +76,7 @@ def fetch_data_from_subdivision_callable():
         id_ = _source.get("id")
 
         if node_id and id_:
-            subdivision_node_map[hit[id_]] = node_id
+            subdivision_node_map[hit["_id"]] = node_id
 
         if city_id and id_:
             subdivision_city_map.setdefault(city_id, []).append(id_)

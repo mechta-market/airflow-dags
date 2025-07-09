@@ -66,16 +66,30 @@ def fetch_data_from_subdivision_callable():
         index=SUBDIVISION_INDEX_NAME, body=query, size=100, scroll="2m"
     )
 
-    subdivision_map = {
-        hit["_id"]: node_id
-        for hit in response["hits"]["hits"]
-        if (node_id := hit["_source"].get("node_id"))
-    }
+    subdivision_node_map = {}
+    subdivision_city_map = {}
 
+    for hit in response["hits"]["hits"]:
+        _source = hit.get("_source", {})
+        node_id = _source.get("node_id")
+        city_id = _source.get("city_id")
+        id_ = _source.get("id")
+
+        if node_id and id_:
+            subdivision_node_map[hit[id_]] = node_id
+
+        if city_id and id_:
+            subdivision_city_map.setdefault(city_id, []).append(id_)
+
+    logging.info(f"subdivision_city_map: {subdivision_city_map}")
     for item in items:
+        city_id = item.get("id")
         subdivision_id = item.get("cb_subdivision_id")
-        if subdivision_id in subdivision_map:
-            item["cb_node_id"] = subdivision_map[subdivision_id]
+
+        if subdivision_id in subdivision_node_map:
+            item["cb_node_id"] = subdivision_node_map[subdivision_id]
+        if city_id in subdivision_city_map:
+            item["subdivision_ids"] = subdivision_city_map[city_id]
 
     put_to_s3(data=items, s3_key=S3_FILE_NAME)
 
@@ -136,7 +150,6 @@ def upsert_city_ids_in_warehouse_callable():
             }
         )
 
-    logging.info(f"ACTIONS: {actions}.")
     logging.info(f"ACTIONS COUNT {len(actions)}.")
     if actions:
         try:

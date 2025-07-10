@@ -49,6 +49,8 @@ def normalize_data_callable() -> None:
             continue
         normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
 
+        item["name_i18n"] = {"ru": item.get("name")}
+
     put_to_s3(data=normalized, s3_key=S3_FILE_NAME)
 
 

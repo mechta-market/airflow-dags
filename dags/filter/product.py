@@ -444,6 +444,10 @@ def extract_data_callable():
                 logging.error(f"error in processing product details: {e}")
                 raise
 
+    if len(extracted_products) == 0:
+        logging.error("No products extracted, failing DAG run")
+        raise ValueError("No products extracted from NSI service")
+
     put_to_s3(data=extracted_products, s3_key=S3_FILE_NAME_EXTRACTED_DATA)
 
     logging.info(f"extracted products count: {len(extracted_products)}")

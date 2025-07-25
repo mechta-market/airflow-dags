@@ -228,6 +228,32 @@ def load_data_callable():
         raise
 
 
+def enrich_subdivision_id_utp_callable():
+    employees = get_from_s3(s3_key=S3_TRANSFORM) or []
+
+    payload = {"query": {"exists": {"field": "zup_id"}}, "size": PAGE_SIZE}
+
+    url = Variable.get("subdivision_mdm_host") + "/_search"
+
+    logging.info("Fetching subdivision mapping: %s", url)
+    resp = requests.post(url, json=payload, timeout=10)
+    resp.raise_for_status()
+
+    hits = resp.json().get("hits", {}).get("hits", [])
+    mapping = {
+        h["_source"]["zup_id"]: h["_id"]
+        for h in hits
+        if h.get("_source", {}).get("zup_id")
+    }
+    logging.info("Loaded %d subdivision mappings", len(mapping))
+
+    for emp in employees:
+        emp["subdivision_id_utp"] = mapping.get(emp.get("subdivision_id"), "")
+
+    put_to_s3(data=employees, s3_key=S3_TRANSFORM)
+    logging.info("Enriched %d employees with subdivision_id_utp", len(employees))
+
+
 with DAG(
     dag_id=DAG_ID,
     default_args=DEFAULT_ARGS,
@@ -266,4 +292,10 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    extract >> transform >> delete >> load >> check
+    enrich = PythonOperator(
+        task_id="enrich_subdivision_id_utp",
+        python_callable=enrich_subdivision_id_utp_callable,
+        trigger_rule=TriggerRule.ALL_SUCCESS,
+    )
+
+    extract >> transform >> delete >> load >> check >> enrich

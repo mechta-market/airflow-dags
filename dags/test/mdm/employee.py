@@ -21,7 +21,7 @@ DEFAULT_ARGS = {
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
 }
-INDEX_NAME = "employee_v2"
+INDEX_NAME = "employee"
 PAGE_SIZE = 1000
 S3_EXTRACT = f"{DAG_ID}/extracted.json"
 S3_TRANSFORM = f"{DAG_ID}/transformed.json"
@@ -73,7 +73,9 @@ def extract_data_callable():
                 timeout=10,
             )
             response.raise_for_status()
-            total = int(response.json().get("pagination_info", {}).get("total_count", 0))
+            total = int(
+                response.json().get("pagination_info", {}).get("total_count", 0)
+            )
             pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
             logging.info("Total pages: %d (page_size=%d)", pages, PAGE_SIZE)
             return pages
@@ -108,7 +110,6 @@ def extract_data_callable():
     if not extracted_employees:
         logging.error("No pages extracted, failing DAG run")
         raise ValueError("no employees extracted")
-
 
     put_to_s3(data=extracted_employees, s3_key=S3_EXTRACT)
     logging.info(f"extracted employees count: {len(extracted_employees)}")
@@ -192,6 +193,7 @@ def delete_different_data_callable():
         except Exception as bulk_error:
             logging.error(f"bulk delete failed, error: {bulk_error}")
             raise
+
 
 def load_data_callable():
     """

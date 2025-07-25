@@ -173,6 +173,8 @@ def delete_different_data_callable():
 
     ids_to_delete = existing_ids - transformed_employees_ids
 
+    logging.info(f"count of ids to delete: {len(ids_to_delete)}")
+
     delete_actions = [
         {
             "_op_type": "delete",

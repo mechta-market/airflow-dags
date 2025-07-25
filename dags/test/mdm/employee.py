@@ -232,7 +232,7 @@ with DAG(
     dag_id=DAG_ID,
     default_args=DEFAULT_ARGS,
     start_date=datetime(2025, 7, 25),
-    schedule_interval="@hourly",
+    schedule="50 * * * *",
     catchup=False,
     max_active_runs=1,
     tags=["elasticsearch", "employee"],

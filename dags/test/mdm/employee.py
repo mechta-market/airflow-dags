@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
+
 
 from airflow import DAG
 from airflow.models import Variable
@@ -229,29 +231,113 @@ def load_data_callable():
 
 
 def enrich_subdivision_id_utp_callable():
-    employees = get_from_s3(s3_key=S3_TRANSFORM) or []
+    """Обогащаем subdivision_id_utp в Elasticsearch."""
+    client = elastic_conn(Variable.get("elastic_scheme"))
 
-    payload = {"query": {"exists": {"field": "zup_id"}}, "size": PAGE_SIZE}
+    try:
+        sub_resp = client.search(
+            index="subdivision",
+            body={"query": {"exists": {"field": "zup_id"}}},
+            size=PAGE_SIZE,
+            scroll="2m",
+        )
+    except Exception as e:
+        logging.error(f"Failed to search subdivision: {e}")
+        return
 
-    url = Variable.get("subdivision_mdm_host") + "/_search"
+    sub_scroll = sub_resp["_scroll_id"]
+    sub_hits = sub_resp["hits"]["hits"]
+    while True:
+        try:
+            resp = client.scroll(scroll_id=sub_scroll, scroll="2m")
+        except Exception as e:
+            logging.error(f"Error during subdivision scroll: {e}")
+            break
+        batch = resp["hits"]["hits"]
+        if not batch:
+            break
+        sub_hits.extend(batch)
 
-    logging.info("Fetching subdivision mapping: %s", url)
-    resp = requests.post(url, json=payload, timeout=10)
-    resp.raise_for_status()
+    try:
+        client.clear_scroll(scroll_id=sub_scroll)
+    except Exception:
+        pass
 
-    hits = resp.json().get("hits", {}).get("hits", [])
-    mapping = {
-        h["_source"]["zup_id"]: h["_id"]
-        for h in hits
-        if h.get("_source", {}).get("zup_id")
-    }
-    logging.info("Loaded %d subdivision mappings", len(mapping))
+    subdivision_map = {}
+    for doc in sub_hits:
+        zup_id = doc["_source"].get("zup_id")
+        if not zup_id:
+            logging.info(f"zup_id is empty: {zup_id}")
+            continue
+        utp_id = doc.get("_id")
+        if not utp_id:
+            logging.info(f"utp_id is empty: {utp_id}")
+            continue
+        subdivision_map[zup_id] = utp_id
 
-    for emp in employees:
-        emp["subdivision_id_utp"] = mapping.get(emp.get("subdivision_id"), "")
+    actions = []
+    for zup_id, utp_id in subdivision_map.items():
+        if not zup_id or not utp_id:
+            logging.info(f"zup_id or utp_id is empty: zup: {zup_id}, utp: {utp_id}")
+            continue
 
-    put_to_s3(data=employees, s3_key=S3_TRANSFORM)
-    logging.info("Enriched %d employees with subdivision_id_utp", len(employees))
+        try:
+            emp_resp = client.search(
+                index=INDEX_NAME,
+                body={"query": {"term": {"subdivision_id": zup_id}}},
+                size=PAGE_SIZE,
+                scroll="2m",
+            )
+        except Exception as e:
+            logging.error(f"Error searching employees for subdivision {zup_id}: {e}")
+            continue
+
+        emp_scroll = emp_resp["_scroll_id"]
+        emp_hits = emp_resp["hits"]["hits"]
+        while emp_hits:
+            for h in emp_hits:
+                emp_id = h.get("_id")
+                if not emp_id:
+                    logging.info(f"employee_id is empty: {emp_id}")
+                    continue
+                actions.append(
+                    {
+                        "_op_type": "update",
+                        "_index": INDEX_NAME,
+                        "_id": emp_id,
+                        "doc": {"subdivision_id_utp": utp_id},
+                    }
+                )
+            try:
+                resp = client.scroll(scroll_id=emp_scroll, scroll="2m")
+            except Exception as e:
+                logging.error(f"Error during employee scroll for {zup_id}: {e}")
+                break
+            emp_hits = resp["hits"]["hits"]
+
+        try:
+            client.clear_scroll(scroll_id=emp_scroll)
+        except Exception:
+            pass
+
+    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    if actions:
+        try:
+            success, errors = helpers.bulk(
+                client,
+                actions,
+                refresh="wait_for",
+                stats_only=False,
+                raise_on_error=False,
+                raise_on_exception=False,
+            )
+            logging.info(f"Successfully updated {success} documents.")
+            if errors:
+                logging.error(f"Errors encountered: {errors}")
+        except BulkIndexError as bulk_error:
+            logging.error(f"Bulk update failed: {bulk_error}")
+    else:
+        logging.info("No subdivision_id_utp updates needed.")
 
 
 with DAG(

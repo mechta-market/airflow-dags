@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
+
 
 from airflow import DAG
 from airflow.models import Variable
@@ -230,6 +232,109 @@ def load_data_callable():
         raise
 
 
+def enrich_subdivision_id_utp_callable():
+    """Обогащаем subdivision_id_utp в Elasticsearch."""
+    client = elastic_conn(Variable.get("elastic_scheme"))
+
+    try:
+        sub_resp = client.search(
+            index="subdivision",
+            body={"query": {"exists": {"field": "zup_id"}}},
+            size=PAGE_SIZE,
+            scroll="2m",
+        )
+    except Exception as e:
+        logging.error(f"Failed to search subdivision: {e}")
+        raise
+
+    sub_scroll = sub_resp["_scroll_id"]
+    sub_hits = sub_resp["hits"]["hits"]
+
+    while True:
+        try:
+            resp = client.scroll(scroll_id=sub_scroll, scroll="2m")
+        except Exception as e:
+            logging.error(f"Error during subdivision scroll: {e}")
+            raise
+        batch = resp["hits"]["hits"]
+        if not batch:
+            break
+        sub_hits.extend(batch)
+
+    client.clear_scroll(scroll_id=sub_scroll)
+
+    subdivision_map = {}
+    for doc in sub_hits:
+        zup_id = doc["_source"].get("zup_id")
+        if not zup_id:
+            continue
+        utp_id = doc.get("_id")
+        if not utp_id:
+            continue
+        subdivision_map[zup_id] = utp_id
+
+    actions = []
+    for zup_id, utp_id in subdivision_map.items():
+        if not zup_id or not utp_id:
+            continue
+
+        try:
+            emp_resp = client.search(
+                index=INDEX_NAME,
+                body={"query": {"term": {"subdivision_id": zup_id}}},
+                size=PAGE_SIZE,
+                scroll="2m",
+            )
+        except Exception as e:
+            logging.error(f"Error searching employees for subdivision {zup_id}: {e}")
+            raise
+
+        emp_scroll = emp_resp["_scroll_id"]
+        emp_hits = emp_resp["hits"]["hits"]
+
+        while emp_hits:
+            for h in emp_hits:
+                emp_id = h.get("_id")
+                if not emp_id:
+                    continue
+                actions.append(
+                    {
+                        "_op_type": "update",
+                        "_index": INDEX_NAME,
+                        "_id": emp_id,
+                        "doc": {"subdivision_id_utp": utp_id},
+                    }
+                )
+            try:
+                resp = client.scroll(scroll_id=emp_scroll, scroll="2m")
+            except Exception as e:
+                logging.error(f"Error during employee scroll for {zup_id}: {e}")
+                raise
+            emp_hits = resp["hits"]["hits"]
+
+        client.clear_scroll(scroll_id=emp_scroll)
+
+    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    if actions:
+        try:
+            success, errors = helpers.bulk(
+                client,
+                actions,
+                refresh="wait_for",
+                stats_only=False,
+                raise_on_error=False,
+                raise_on_exception=False,
+            )
+            logging.info(f"Successfully updated {success} documents.")
+            if errors:
+                logging.error(f"Errors encountered: {errors}")
+        except BulkIndexError as bulk_error:
+            logging.error(f"Bulk update failed: {bulk_error}")
+            raise
+    else:
+        logging.info("No subdivision_id_utp updates needed.")
+
+
 with DAG(
     dag_id=DAG_ID,
     default_args=DEFAULT_ARGS,
@@ -268,4 +373,10 @@ with DAG(
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    extract >> transform >> delete >> load >> check
+    enrich = PythonOperator(
+        task_id="enrich_subdivision_id_utp",
+        python_callable=enrich_subdivision_id_utp_callable,
+        trigger_rule=TriggerRule.ALL_SUCCESS,
+    )
+
+    extract >> transform >> delete >> enrich >> check

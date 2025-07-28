@@ -243,42 +243,37 @@ def enrich_subdivision_id_utp_callable():
         )
     except Exception as e:
         logging.error(f"Failed to search subdivision: {e}")
-        return
+        raise
 
     sub_scroll = sub_resp["_scroll_id"]
     sub_hits = sub_resp["hits"]["hits"]
+
     while True:
         try:
             resp = client.scroll(scroll_id=sub_scroll, scroll="2m")
         except Exception as e:
             logging.error(f"Error during subdivision scroll: {e}")
-            break
+            raise
         batch = resp["hits"]["hits"]
         if not batch:
             break
         sub_hits.extend(batch)
 
-    try:
-        client.clear_scroll(scroll_id=sub_scroll)
-    except Exception:
-        pass
+    client.clear_scroll(scroll_id=sub_scroll)
 
     subdivision_map = {}
     for doc in sub_hits:
         zup_id = doc["_source"].get("zup_id")
         if not zup_id:
-            logging.info(f"zup_id is empty: {zup_id}")
             continue
         utp_id = doc.get("_id")
         if not utp_id:
-            logging.info(f"utp_id is empty: {utp_id}")
             continue
         subdivision_map[zup_id] = utp_id
 
     actions = []
     for zup_id, utp_id in subdivision_map.items():
         if not zup_id or not utp_id:
-            logging.info(f"zup_id or utp_id is empty: zup: {zup_id}, utp: {utp_id}")
             continue
 
         try:
@@ -290,15 +285,15 @@ def enrich_subdivision_id_utp_callable():
             )
         except Exception as e:
             logging.error(f"Error searching employees for subdivision {zup_id}: {e}")
-            continue
+            raise
 
         emp_scroll = emp_resp["_scroll_id"]
         emp_hits = emp_resp["hits"]["hits"]
+
         while emp_hits:
             for h in emp_hits:
                 emp_id = h.get("_id")
                 if not emp_id:
-                    logging.info(f"employee_id is empty: {emp_id}")
                     continue
                 actions.append(
                     {
@@ -312,13 +307,10 @@ def enrich_subdivision_id_utp_callable():
                 resp = client.scroll(scroll_id=emp_scroll, scroll="2m")
             except Exception as e:
                 logging.error(f"Error during employee scroll for {zup_id}: {e}")
-                break
+                raise
             emp_hits = resp["hits"]["hits"]
 
-        try:
-            client.clear_scroll(scroll_id=emp_scroll)
-        except Exception:
-            pass
+        client.clear_scroll(scroll_id=emp_scroll)
 
     logging.info(f"ACTIONS COUNT {len(actions)}.")
     if actions:
@@ -336,6 +328,7 @@ def enrich_subdivision_id_utp_callable():
                 logging.error(f"Errors encountered: {errors}")
         except BulkIndexError as bulk_error:
             logging.error(f"Bulk update failed: {bulk_error}")
+            raise
     else:
         logging.info("No subdivision_id_utp updates needed.")
 
@@ -384,4 +377,4 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    extract >> transform >> delete >> load >> check >> enrich
+    extract >> transform >> delete >> enrich >> check

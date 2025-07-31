@@ -379,4 +379,4 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    extract >> transform >> delete >> enrich >> check
+    extract >> transform >> delete >> load >> enrich >> check

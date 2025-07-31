@@ -20,8 +20,8 @@ DAG_ID = "employee"
 DEFAULT_ARGS = {
     "owner": "Askar",
     "depends_on_past": False,
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    # "retries": 1,
+    # "retry_delay": timedelta(minutes=5),
 }
 INDEX_NAME = "employee"
 PAGE_SIZE = 1000

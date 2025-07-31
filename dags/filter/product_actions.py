@@ -20,7 +20,7 @@ S3_FILE_NAME = f"{DAG_ID}/product_actions.json"
 
 
 
-def fetch_data_callable(**context):
+def fetch_data_callable():
     url = f"{Variable.get("site_api_host")}/v2/airflow/product/action"
     page_size = 100
 
@@ -74,7 +74,7 @@ def fetch_data_callable(**context):
 
 
 
-def delete_previous_data_callable(**context):
+def delete_previous_data_callable():
     items = get_from_s3(s3_key=S3_FILE_NAME)
 
     if not items:
@@ -145,7 +145,7 @@ def delete_previous_data_callable(**context):
 
     
     
-def upsert_to_es_callable(**context):
+def upsert_to_es_callable():
     items = get_from_s3(s3_key=S3_FILE_NAME)
 
     if not items:
@@ -202,19 +202,16 @@ with DAG(
     fetch_data = PythonOperator(
         task_id="fetch_data_task",
         python_callable=fetch_data_callable,
-        provide_context=True,
     )
     
     delete_previous_data = PythonOperator(
         task_id="delete_previous_data_task",
         python_callable=delete_previous_data_callable,
-        provide_context=True,
     )
     
     upsert_to_es = PythonOperator(
         task_id="upsert_to_es_task",
         python_callable=upsert_to_es_callable,
-        provide_context=True,
     )
 
     fetch_data >> delete_previous_data >> upsert_to_es

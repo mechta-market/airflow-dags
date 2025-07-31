@@ -470,55 +470,47 @@ with DAG(
     get_product_ids = PythonOperator(
         task_id="get_product_ids_task",
         python_callable=get_product_ids_callable,
-        provide_context=True,
     )
 
     get_city = PythonOperator(
         task_id="get_city_task",
         python_callable=get_city_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     get_subdivision = PythonOperator(
         task_id="get_subdivision_task",
         python_callable=get_subdivision_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     transform_base_price = PythonOperator(
         task_id="transform_base_price_task",
         python_callable=transform_base_price_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     transform_final_price = PythonOperator(
         task_id="transform_final_price_task",
         python_callable=transform_final_price_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     load_base_price = PythonOperator(
         task_id="load_base_price_task",
         python_callable=load_base_price_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     load_final_price = PythonOperator(
         task_id="load_final_price_task",
         python_callable=load_final_price_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     check_errors = PythonOperator(
         task_id="check_errors_task",
         python_callable=check_errors_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_DONE,
     )
 

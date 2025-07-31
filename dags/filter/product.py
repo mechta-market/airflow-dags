@@ -576,34 +576,29 @@ with DAG(
     extract_data = PythonOperator(
         task_id="extract_data_task",
         python_callable=extract_data_callable,
-        provide_context=True,
     )
 
     transform_data = PythonOperator(
         task_id="transform_data_task",
         python_callable=transform_data_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     delete_different_data = PythonOperator(
         task_id="delete_different_data_task",
         python_callable=delete_different_data_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     load_data = PythonOperator(
         task_id="load_data_task",
         python_callable=load_data_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     check_errors = PythonOperator(
         task_id="check_errors_task",
         python_callable=check_errors_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_DONE,
     )
 

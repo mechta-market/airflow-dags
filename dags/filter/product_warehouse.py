@@ -297,41 +297,35 @@ with DAG(
     get_product_ids = PythonOperator(
         task_id="get_product_ids_task",
         python_callable=get_product_ids_callable,
-        provide_context=True,
     )
 
     get_warehouse = PythonOperator(
         task_id="get_warehouse_task",
         python_callable=get_warehouse_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     get_city_warehouse = PythonOperator(
         task_id="get_city_warehouse_task",
         python_callable=get_city_warehouse_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     transform_data = PythonOperator(
         task_id="transform_data_task",
         python_callable=transform_data_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     load_data = PythonOperator(
         task_id="load_data_task",
         python_callable=load_data_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
     check_errors = PythonOperator(
         task_id="check_errors_task",
         python_callable=check_errors_callable,
-        provide_context=True,
         trigger_rule=TriggerRule.ALL_DONE,
     )
 

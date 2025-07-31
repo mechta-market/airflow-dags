@@ -36,7 +36,7 @@ def fetch_data_callable(**context) -> None:
     put_to_s3(data=response.get("data"), s3_key=S3_FILE_NAME)
 
 
-def normalize_data_callable(**context) -> None:
+def normalize_data_callable() -> None:
     """Нормализация данных перед загрузкой в Elasticsearch."""
     items = get_from_s3(s3_key=S3_FILE_NAME)
 
@@ -58,7 +58,7 @@ def normalize_data_callable(**context) -> None:
     put_to_s3(data=normalized, s3_key=S3_FILE_NAME)
 
 
-def upsert_to_es_callable(**context):
+def upsert_to_es_callable():
     items = get_from_s3(s3_key=S3_FILE_NAME)
 
     if not items:
@@ -106,19 +106,16 @@ with DAG(
     fetch_data = PythonOperator(
         task_id="fetch_data_task",
         python_callable=fetch_data_callable,
-        provide_context=True,
     )
 
     normalize_data = PythonOperator(
         task_id="normalize_data_task",
         python_callable=normalize_data_callable,
-        provide_context=True,
     )
 
     upsert_to_es = PythonOperator(
         task_id="upsert_to_es_task",
         python_callable=upsert_to_es_callable,
-        provide_context=True,
     )
 
     fetch_data >> normalize_data >> upsert_to_es

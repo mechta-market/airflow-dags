@@ -68,13 +68,13 @@ def save_data_to_tmp_file(context, xcom_key: str, data: Any, file_path: str):
     context["ti"].xcom_push(key=xcom_key, value=file_path)
 
 
-def check_errors_callable(**context):
-    dag_run = context["dag_run"]
+def check_errors_callable(**kwargs):
+    dag_run = kwargs["dag_run"]
 
     failed_tasks = [
         ti.task_id
         for ti in dag_run.get_task_instances()
-        if ti.state == State.FAILED and ti.task_id != context["task_instance"].task_id
+        if ti.state == State.FAILED and ti.task_id != kwargs["task_instance"].task_id
     ]
 
     if failed_tasks:

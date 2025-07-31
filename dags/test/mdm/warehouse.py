@@ -11,7 +11,8 @@ from helpers.utils import (
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.providers.standard.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator
+
 
 
 DAG_ID = "warehouse"
@@ -74,7 +75,7 @@ default_args = {
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    schedule_interval="40 * * * *",
+    schedule="40 * * * *",
     start_date=datetime(2025, 5, 14),
     catchup=False,
     tags=["1c", "elasticsearch"],

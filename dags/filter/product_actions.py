@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 from elasticsearch import helpers
@@ -192,7 +192,7 @@ default_args = {
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    schedule_interval="*/10 * * * *",
+    schedule="*/10 * * * *",
     start_date=datetime(2025, 5, 27),
     catchup=False,
     tags=["elasticsearch", "site", "product"],

@@ -10,7 +10,7 @@ from helpers.utils import (
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
@@ -97,7 +97,7 @@ default_args = {
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    schedule_interval="15 * * * *",
+    schedule="15 * * * *",
     start_date=datetime(2025, 5, 14),
     catchup=False,
     tags=["1c", "elasticsearch", "product"],

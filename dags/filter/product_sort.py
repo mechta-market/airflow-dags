@@ -4,7 +4,7 @@ from helpers.utils import request_to_site_api, put_to_s3, get_from_s3
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 from elasticsearch import helpers
@@ -68,7 +68,7 @@ default_args = {
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    schedule_interval="0 0 * * *",
+    schedule="0 0 * * *",
     start_date=datetime(2025, 5, 27),
     catchup=False,
     tags=["elasticsearch", "site", "product"],

@@ -187,31 +187,26 @@ with DAG(
     fetch_data = PythonOperator(
         task_id="fetch_data_task",
         python_callable=fetch_data_callable,
-        provide_context=True,
     )
 
     normalize_data = PythonOperator(
         task_id="normalize_data_task",
         python_callable=normalize_data_callable,
-        provide_context=True,
     )
 
     fetch_data_from_subdivision = PythonOperator(
         task_id="fetch_data_from_subdivision_task",
         python_callable=fetch_data_from_subdivision_callable,
-        provide_context=True,
     )
 
     upsert_to_es = PythonOperator(
         task_id="upsert_to_es_task",
         python_callable=upsert_to_es_callable,
-        provide_context=True,
     )
 
     upsert_city_ids_in_warehouse = PythonOperator(
         task_id="upsert_city_ids_in_warehouse_task",
         python_callable=upsert_city_ids_in_warehouse_callable,
-        provide_context=True,
     )
 
     (

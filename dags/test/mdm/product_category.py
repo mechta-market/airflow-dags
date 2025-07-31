@@ -11,7 +11,6 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 
 
-
 DAG_ID = "product_category"
 DICTIONARY_NAME = "product_category"
 S3_FILE_NAME = f"{DAG_ID}/product_category.json"
@@ -59,13 +58,11 @@ with DAG(
     fetch_data = PythonOperator(
         task_id="fetch_data_task",
         python_callable=fetch_data_callable,
-        provide_context=True,
     )
 
     upsert_to_es = PythonOperator(
         task_id="upsert_to_es_task",
         python_callable=upsert_to_es_callable,
-        provide_context=True,
     )
 
     fetch_data >> upsert_to_es

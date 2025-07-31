@@ -85,19 +85,16 @@ with DAG(
     fetch_data = PythonOperator(
         task_id="fetch_data_task",
         python_callable=fetch_data_callable,
-        provide_context=True,
     )
 
     normalize_data = PythonOperator(
         task_id="normalize_data_task",
         python_callable=normalize_data_callable,
-        provide_context=True,
     )
 
     upsert_to_es = PythonOperator(
         task_id="upsert_to_es_task",
         python_callable=upsert_to_es_callable,
-        provide_context=True,
     )
 
     fetch_data >> normalize_data >> upsert_to_es

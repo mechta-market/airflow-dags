@@ -8,7 +8,7 @@ from helpers.utils import (
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.operators.python_operator import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 
 DAG_ID = "product_category"

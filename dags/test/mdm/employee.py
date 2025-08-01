@@ -13,15 +13,15 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import fetch_with_retry, check_errors_callable
+from filter.utils import fetch_with_retry
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
 DAG_ID = "employee"
 DEFAULT_ARGS = {
     "owner": "Askar",
     "depends_on_past": False,
-    # "retries": 1,
-    # "retry_delay": timedelta(minutes=5),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=1),
 }
 INDEX_NAME = "employee"
 PAGE_SIZE = 1000
@@ -367,16 +367,10 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    check = PythonOperator(
-        task_id="check_errors",
-        python_callable=check_errors_callable,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
-
     enrich = PythonOperator(
         task_id="enrich_subdivision_id_utp",
         python_callable=enrich_subdivision_id_utp_callable,
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    extract >> transform >> delete >> load >> enrich >> check
+    extract >> transform >> delete >> load >> enrich

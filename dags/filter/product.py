@@ -13,7 +13,6 @@ from airflow.utils.trigger_rule import TriggerRule
 
 from filter.utils import (
     fetch_with_retry,
-    check_errors_callable,
 )
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
@@ -24,7 +23,7 @@ default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
     "retries": 1,
-    "retry_delay": timedelta(minutes=5),
+    "retry_delay": timedelta(minutes=2),
 }
 
 # Constants
@@ -596,16 +595,4 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    check_errors = PythonOperator(
-        task_id="check_errors_task",
-        python_callable=check_errors_callable,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
-
-    (
-        extract_data
-        >> transform_data
-        >> delete_different_data
-        >> load_data
-        >> check_errors
-    )
+    (extract_data >> transform_data >> delete_different_data >> load_data)

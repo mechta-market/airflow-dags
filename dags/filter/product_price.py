@@ -12,7 +12,6 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import check_errors_callable
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
 
@@ -22,8 +21,8 @@ DAG_ID = "product_price"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
-    # "retries": 1,
-    # "retry_delay": timedelta(minutes=5),
+    "retries": 1,
+    "retry_delay": timedelta(minutes=2),
 }
 
 # Constants
@@ -508,13 +507,7 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    check_errors = PythonOperator(
-        task_id="check_errors_task",
-        python_callable=check_errors_callable,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
-
     get_product_ids >> [get_city, get_subdivision]
     get_city >> transform_base_price >> load_base_price
     get_subdivision >> transform_final_price >> load_final_price
-    [load_base_price, load_final_price] >> check_errors
+    [load_base_price, load_final_price]

@@ -12,7 +12,6 @@ from airflow.models import Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import check_errors_callable
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
 # DAG parameters
@@ -323,16 +322,9 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    check_errors = PythonOperator(
-        task_id="check_errors_task",
-        python_callable=check_errors_callable,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
-
     (
         get_product_ids
         >> [get_warehouse, get_city_warehouse]
         >> transform_data
         >> load_data
-        >> check_errors
     )

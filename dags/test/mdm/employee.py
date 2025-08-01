@@ -8,8 +8,8 @@ from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
 from airflow.sdk import DAG, Variable
-from airflow.sdk.operators.python import PythonOperator
 from airflow.sdk.enums import TriggerRule
+from airflow.operators.python import PythonOperator
 
 from filter.utils import fetch_with_retry
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3

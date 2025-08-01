@@ -7,11 +7,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
-
-from airflow import DAG
-from airflow.models import Variable
-from airflow.operators.python import PythonOperator
-from airflow.utils.trigger_rule import TriggerRule
+from airflow.sdk import DAG, Variable
+from airflow.sdk.operators.python import PythonOperator
+from airflow.sdk.enums import TriggerRule
 
 from filter.utils import fetch_with_retry
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
@@ -23,8 +21,10 @@ DEFAULT_ARGS = {
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
 }
+
 INDEX_NAME = "employee"
 PAGE_SIZE = 1000
+
 S3_EXTRACT = f"{DAG_ID}/extracted.json"
 S3_TRANSFORM = f"{DAG_ID}/transformed.json"
 
@@ -52,20 +52,12 @@ class DocumentEmployee:
 
 
 def encode_employee(p: Dict) -> Dict:
-    """
-    Преобразование «сырых» данных сотрудника в документ для Elasticsearch.
-    """
     return DocumentEmployee(p).__dict__
 
 
 def extract_data_callable():
-    """
-    Извлечение данных сотрудников из employee и сохранение в S3.
-    """
     MAX_WORKERS = 2
-
-    url = Variable.get("employee_host") + "/employee"
-    logging.info("Start extracting employees from %s", url)
+    url = Variable.get("employee_host").removesuffix("/") + "/employee"
 
     def get_total_pages() -> int:
         try:
@@ -78,9 +70,7 @@ def extract_data_callable():
             total = int(
                 response.json().get("pagination_info", {}).get("total_count", 0)
             )
-            pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
-            logging.info("Total pages: %d (page_size=%d)", pages, PAGE_SIZE)
-            return pages
+            return (total + PAGE_SIZE - 1) // PAGE_SIZE
         except requests.RequestException as e:
             logging.error("Failed to fetch total pages: %s", e)
             raise
@@ -90,11 +80,11 @@ def extract_data_callable():
             url,
             params={"list_params.page": page, "list_params.page_size": PAGE_SIZE},
         )
-        results = data.get("results", [])
-        return results
+        return data.get("results", [])
 
     total_pages = get_total_pages()
     extracted_employees: List[Dict] = []
+    
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {
             executor.submit(fetch_page, page): page for page in range(total_pages)
@@ -110,7 +100,6 @@ def extract_data_callable():
                 raise
 
     if not extracted_employees:
-        logging.error("No pages extracted, failing DAG run")
         raise ValueError("no employees extracted")
 
     put_to_s3(data=extracted_employees, s3_key=S3_EXTRACT)
@@ -118,9 +107,6 @@ def extract_data_callable():
 
 
 def transform_data_callable():
-    """
-    Преобразование извлечённых данных в документы для Elasticsearch.
-    """
     MAX_WORKERS = 7
 
     collected_employees: List[Dict] = get_from_s3(S3_EXTRACT)
@@ -136,27 +122,23 @@ def transform_data_callable():
                 raise
 
     put_to_s3(data=transformed_employees, s3_key=S3_TRANSFORM)
-
     logging.info(f"transformed employees count: {len(transformed_employees)}")
 
 
 def delete_different_data_callable():
-    """
-    Удаление данных из Elasticsearch, которые не присутствуют в S3.
-    """
     transformed_employees: List[Dict] = get_from_s3(S3_TRANSFORM)
     transformed_employees_ids = {
         employee.get("id") for employee in transformed_employees if employee.get("id")
     }
-    client = elastic_conn(Variable.get("elastic_scheme"))
 
+    client = elastic_conn(Variable.get("elastic_scheme"))
     existing_ids_query = {
         "_source": False,
         "fields": ["_id"],
         "query": {"match_all": {}},
     }
 
-    scroll_id = Any
+    scroll_id: str | None = None
     try:
         response = client.search(
             index=INDEX_NAME, body=existing_ids_query, size=5000, scroll="2m"
@@ -174,7 +156,6 @@ def delete_different_data_callable():
             client.clear_scroll(scroll_id=scroll_id)
 
     ids_to_delete = existing_ids - transformed_employees_ids
-
     logging.info(f"count of ids to delete: {len(ids_to_delete)}")
 
     delete_actions = [
@@ -200,13 +181,9 @@ def delete_different_data_callable():
 
 
 def load_data_callable():
-    """
-    Загрузка преобразованных данных в Elasticsearch.
-    """
     transformed_employees = get_from_s3(s3_key=S3_TRANSFORM)
 
     client = elastic_conn(Variable.get("elastic_scheme"))
-
     actions = [
         {
             "_op_type": "update",
@@ -233,7 +210,6 @@ def load_data_callable():
 
 
 def enrich_subdivision_id_utp_callable():
-    """Обогащаем subdivision_id_utp в Elasticsearch."""
     client = elastic_conn(Variable.get("elastic_scheme"))
 
     try:
@@ -314,7 +290,7 @@ def enrich_subdivision_id_utp_callable():
 
         client.clear_scroll(scroll_id=emp_scroll)
 
-    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    logging.info(f"actions count {len(actions)}.")
     if actions:
         try:
             success, errors = helpers.bulk(

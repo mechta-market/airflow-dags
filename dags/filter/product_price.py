@@ -34,8 +34,6 @@ S3_FILE_NAME_FINAL_PRICE = f"{DAG_ID}/final_price.json"
 
 ERR_NO_ROWS = "err_no_rows"
 
-logging.basicConfig(level=logging.INFO)
-
 
 class DocumentBasePrice:
     def __init__(self, city_id: str, price: float):
@@ -97,6 +95,10 @@ def get_product_ids_callable():
             client.clear_scroll(scroll_id=scroll_id)
 
     product_ids = list(existing_ids)
+    logging.info(f"product_ids count={len(product_ids)}")
+
+    if len(product_ids) == 0:
+        raise ValueError("extracted product_ids count=0")
 
     put_to_s3(data=product_ids, s3_key=S3_FILE_NAME_PRODUCT_IDS)
 

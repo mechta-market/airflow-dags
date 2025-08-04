@@ -32,10 +32,6 @@ TARGET_LANGUAGES = ["ru", "kz"]
 S3_FILE_NAME_EXTRACTED_DATA = f"{DAG_ID}/extracted_data.json"
 S3_FILE_NAME_TRANSFORMED_PRODUCTS = f"{DAG_ID}/transformed_products.json"
 
-# Configurations
-
-logging.basicConfig(level=logging.INFO)
-
 # Functions
 
 
@@ -439,8 +435,8 @@ def extract_data_callable():
                 logging.error(f"error in processing product details: {e}")
                 raise
 
-    if len(extracted_products) == 0:
-        raise ValueError("no products extracted from source service")
+    if len(product_ids) == 0:
+        raise ValueError("extracted product_ids count=0")
 
     put_to_s3(data=extracted_products, s3_key=S3_FILE_NAME_EXTRACTED_DATA)
 

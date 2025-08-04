@@ -28,8 +28,6 @@ S3_FILE_NAME_WAREHOUSE_CITIES = f"{DAG_ID}/warehouse_cities.json"
 S3_FILE_NAME_WAREHOUSES = f"{DAG_ID}/warehouses.json"
 S3_FILE_NAME_PRODUCT_WAREHOUSES = f"{DAG_ID}/product_warehouses.json"
 
-logging.basicConfig(level=logging.INFO)
-
 
 class DocumentWarehouse:
     def __init__(
@@ -77,6 +75,9 @@ def get_product_ids_callable():
 
     product_ids = list(existing_ids)
     logging.info(f"product_ids count={len(product_ids)}")
+
+    if len(product_ids) == 0:
+        raise ValueError("extracted product_ids count=0")
 
     put_to_s3(data=product_ids, s3_key=S3_FILE_NAME_PRODUCT_IDS)
 

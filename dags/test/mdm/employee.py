@@ -27,8 +27,6 @@ PAGE_SIZE = 1000
 S3_EXTRACT = f"{DAG_ID}/extracted.json"
 S3_TRANSFORM = f"{DAG_ID}/transformed.json"
 
-logging.basicConfig(level=logging.INFO)
-
 
 class DocumentEmployee:
     def __init__(self, p: Dict):

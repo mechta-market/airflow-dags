@@ -196,7 +196,7 @@ def transform_base_price_callable():
 
     product_base_price_dict: Dict[str, List[Dict[str, Any]]] = {}
 
-    def process_product_base_price(product_id: str) -> (str, List[Dict[str, Any]]):
+    def process_product_base_price(product_id: str) -> tuple[str, List[Dict[str, Any]]]:
         base_price = {}
         spec_base_prices = []
 
@@ -292,7 +292,7 @@ def transform_final_price_callable():
 
     product_final_price_dict: Dict[str, List[Dict[str, Any]]] = {}
 
-    def process_product_final_price(product_id: str) -> (str, List[Dict[str, Any]]):
+    def process_product_final_price(product_id: str) -> tuple[str, List[Dict[str, Any]]]:
         final_price = {}
         spec_final_prices = []
 

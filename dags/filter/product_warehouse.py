@@ -188,7 +188,7 @@ def transform_data_callable():
 
     product_warehouse_dict: Dict[str, List[Dict[str, Any]]] = {}
 
-    def process_product_warehouse(product_id: str) -> (str, List[Dict[str, Any]]):
+    def process_product_warehouse(product_id: str) -> tuple[str, List[Dict[str, Any]]]:
         response = requests.get(
             f"{BASE_URL}/product_warehouse",
             params={

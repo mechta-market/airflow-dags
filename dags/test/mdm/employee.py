@@ -1,6 +1,6 @@
 import logging
 import requests
-from typing import List, Dict, Any
+from typing import List, Dict
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

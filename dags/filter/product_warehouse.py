@@ -13,17 +13,13 @@ from airflow.utils.trigger_rule import TriggerRule
 
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
-# DAG parameters
-
 DAG_ID = "product_warehouse"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
     "retries": 1,
-    "retry_delay": timedelta(minutes=2),
+    "retry_delay": timedelta(minutes=1),
 }
-
-# Constants
 
 INDEX_NAME = "product_v2"
 
@@ -32,11 +28,7 @@ S3_FILE_NAME_WAREHOUSE_CITIES = f"{DAG_ID}/warehouse_cities.json"
 S3_FILE_NAME_WAREHOUSES = f"{DAG_ID}/warehouses.json"
 S3_FILE_NAME_PRODUCT_WAREHOUSES = f"{DAG_ID}/product_warehouses.json"
 
-# Configurations
-
 logging.basicConfig(level=logging.INFO)
-
-# Functions
 
 
 class DocumentWarehouse:
@@ -55,9 +47,6 @@ class DocumentWarehouse:
             "city_id": self.city_ids,
             "real_value": self.real_value,
         }
-
-
-# Tasks
 
 
 def get_product_ids_callable():
@@ -87,11 +76,11 @@ def get_product_ids_callable():
             client.clear_scroll(scroll_id=scroll_id)
 
     product_ids = list(existing_ids)
-    logging.info(f"product ids len ={len(product_ids)}")
+    logging.info(f"product_ids count={len(product_ids)}")
 
     put_to_s3(data=product_ids, s3_key=S3_FILE_NAME_PRODUCT_IDS)
 
-    logging.info(f"extracted product_ids count: {len(product_ids)}")
+    logging.info(f"extracted product_ids count={len(product_ids)}")
 
 
 def get_warehouse_callable():
@@ -130,7 +119,7 @@ def get_warehouse_callable():
 
     put_to_s3(data=warehouses_dict, s3_key=S3_FILE_NAME_WAREHOUSES)
 
-    logging.info(f"extracted warehouses count: {len(warehouses_dict)}")
+    logging.info(f"extracted warehouses count={len(warehouses_dict)}")
 
 
 def get_city_warehouse_callable():
@@ -184,7 +173,7 @@ def get_city_warehouse_callable():
 
     put_to_s3(data=warehouse_cities_dict, s3_key=S3_FILE_NAME_WAREHOUSE_CITIES)
 
-    logging.info(f"extracted city_warehouses count: {len(warehouse_cities_dict)}")
+    logging.info(f"extracted city_warehouses count={len(warehouse_cities_dict)}")
 
 
 def transform_data_callable():
@@ -251,7 +240,7 @@ def transform_data_callable():
 
     put_to_s3(data=product_warehouse_dict, s3_key=S3_FILE_NAME_PRODUCT_WAREHOUSES)
 
-    logging.info(f"transformed product_warehouses count: {len(product_warehouse_dict)}")
+    logging.info(f"transformed product_warehouses count={len(product_warehouse_dict)}")
 
 
 def load_data_callable():

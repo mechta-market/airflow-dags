@@ -1,5 +1,12 @@
 import logging
 from datetime import datetime
+
+from airflow.sdk import DAG, Variable
+from airflow.operators.python import PythonOperator
+
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
+
 from helpers.utils import (
     elastic_conn,
     request_to_1c,
@@ -9,18 +16,17 @@ from helpers.utils import (
     ZERO_UUID,
 )
 
-from airflow import DAG
-from airflow.models import Variable
-from airflow.operators.python import PythonOperator
-
-from elasticsearch import helpers
-from elasticsearch.helpers import BulkIndexError
-
 DAG_ID = "city"
+default_args = {
+    "owner": "Amir",
+    "depends_on_past": False,
+}
+
 DICTIONARY_NAME = "city"
 WAREHOUSE_INDEX_NAME = "warehouse"
 SUBDIVISION_INDEX_NAME = "subdivision"
 NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
+
 S3_FILE_NAME = f"{DAG_ID}/city.json"
 
 
@@ -169,11 +175,6 @@ def upsert_city_ids_in_warehouse_callable():
         except BulkIndexError as bulk_error:
             logging.error(f"Bulk update failed: {bulk_error}")
 
-
-default_args = {
-    "owner": "Amir",
-    "depends_on_past": False,
-}
 
 with DAG(
     dag_id=DAG_ID,

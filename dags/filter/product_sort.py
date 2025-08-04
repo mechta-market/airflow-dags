@@ -1,18 +1,19 @@
 import logging
 from datetime import datetime
-from helpers.utils import request_to_site_api, put_to_s3, get_from_s3
 
-from airflow import DAG
-from airflow.models import Variable
+from airflow.sdk import DAG, Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
+from helpers.utils import request_to_site_api, put_to_s3, get_from_s3
+
 DAG_ID = "product_sort"
 
 INDEX_NAME = "product_v2"
+
 S3_FILE_NAME = f"{DAG_ID}/product_sort.json"
 
 

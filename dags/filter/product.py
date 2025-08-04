@@ -10,10 +10,7 @@ from airflow.sdk import DAG, Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import (
-    fetch_with_retry,
-)
-from helpers.utils import elastic_conn, put_to_s3, get_from_s3
+from helpers.utils import elastic_conn, put_to_s3, get_from_s3, fetch_with_retry
 
 # DAG parameters
 
@@ -448,7 +445,7 @@ def extract_data_callable():
 
     put_to_s3(data=extracted_products, s3_key=S3_FILE_NAME_EXTRACTED_DATA)
 
-    logging.info(f"extracted products count: {len(extracted_products)}")
+    logging.info(f"extracted products count={len(extracted_products)}")
 
 
 def transform_data_callable():
@@ -471,7 +468,7 @@ def transform_data_callable():
 
     put_to_s3(data=transformed_products, s3_key=S3_FILE_NAME_TRANSFORMED_PRODUCTS)
 
-    logging.info(f"transformed products count: {len(transformed_products)}")
+    logging.info(f"transformed products count={len(transformed_products)}")
 
 
 def delete_different_data_callable():
@@ -508,6 +505,7 @@ def delete_different_data_callable():
             client.clear_scroll(scroll_id=scroll_id)
 
     ids_to_delete = existing_ids - transformed_product_ids
+    logging.info(f"product ids to delete count={len(ids_to_delete)}")
 
     delete_actions = [
         {
@@ -523,7 +521,7 @@ def delete_different_data_callable():
             success, errors = helpers.bulk(
                 client, delete_actions, refresh="wait_for", stats_only=False
             )
-            logging.info(f"delete success, deleted document count: {success}")
+            logging.info(f"delete success, deleted document count={success}")
             if errors:
                 logging.error(f"error during bulk delete: {errors}")
         except Exception as bulk_error:
@@ -553,7 +551,7 @@ def load_data_callable():
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        logging.info(f"update success, updated documents count: {success}")
+        logging.info(f"update success, updated documents count={success}")
         if errors:
             logging.error(f"error during bulk update: {errors}")
     except Exception as bulk_error:

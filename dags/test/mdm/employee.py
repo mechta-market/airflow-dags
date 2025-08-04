@@ -11,8 +11,7 @@ from airflow.sdk import DAG, Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import fetch_with_retry
-from helpers.utils import elastic_conn, put_to_s3, get_from_s3
+from helpers.utils import elastic_conn, put_to_s3, get_from_s3, fetch_with_retry
 
 DAG_ID = "employee"
 DEFAULT_ARGS = {
@@ -105,7 +104,7 @@ def extract_data_callable():
         raise ValueError("no employees extracted")
 
     put_to_s3(data=extracted_employees, s3_key=S3_EXTRACT)
-    logging.info(f"extracted employees count: {len(extracted_employees)}")
+    logging.info(f"extracted employees count={len(extracted_employees)}")
 
 
 def transform_data_callable():
@@ -124,7 +123,7 @@ def transform_data_callable():
                 raise
 
     put_to_s3(data=transformed_employees, s3_key=S3_TRANSFORM)
-    logging.info(f"transformed employees count: {len(transformed_employees)}")
+    logging.info(f"transformed employees count={len(transformed_employees)}")
 
 
 def delete_different_data_callable():
@@ -158,7 +157,7 @@ def delete_different_data_callable():
             client.clear_scroll(scroll_id=scroll_id)
 
     ids_to_delete = existing_ids - transformed_employees_ids
-    logging.info(f"count of ids to delete: {len(ids_to_delete)}")
+    logging.info(f"employee ids to delete count={len(ids_to_delete)}")
 
     delete_actions = [
         {

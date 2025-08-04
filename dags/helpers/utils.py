@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 import requests
 from typing import Any
 
@@ -91,3 +92,16 @@ def get_from_s3(s3_key: str) -> Any:
     file_content = file_obj.get()["Body"].read()
     items = json.loads(file_content)
     return items
+
+
+def fetch_with_retry(url: str, params=None, retries=3):
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, params=params, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException:
+            if attempt < retries - 1:
+                time.sleep(1 * (attempt + 1))
+            else:
+                raise

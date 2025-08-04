@@ -1,5 +1,9 @@
 import logging
 from datetime import datetime
+
+from airflow.sdk import DAG, Variable
+from airflow.operators.python import PythonOperator
+
 from helpers.utils import (
     elastic_conn,
     request_to_1c,
@@ -9,14 +13,15 @@ from helpers.utils import (
     ZERO_UUID,
 )
 
-from airflow import DAG
-from airflow.models import Variable
-from airflow.operators.python import PythonOperator
-
-
 DAG_ID = "warehouse"
+default_args = {
+    "owner": "Amir",
+    "depends_on_past": False,
+}
+
 DICTIONARY_NAME = "warehouse"
 NORMALIZE_FIELDS = ["subdivision_id", "node_id", "zone_grouping_id"]
+
 S3_FILE_NAME = f"{DAG_ID}/warehouse.json"
 
 
@@ -65,11 +70,6 @@ def upsert_to_es_callable():
             body={"doc": item, "doc_as_upsert": True},
         )
 
-
-default_args = {
-    "owner": "Amir",
-    "depends_on_past": False,
-}
 
 with DAG(
     dag_id=DAG_ID,

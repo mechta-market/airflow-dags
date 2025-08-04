@@ -1,5 +1,12 @@
 import logging
 from datetime import datetime
+
+from airflow.sdk import DAG, Variable
+from airflow.operators.python import PythonOperator
+
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
+
 from helpers.utils import (
     elastic_conn,
     request_to_1c_with_data,
@@ -8,17 +15,11 @@ from helpers.utils import (
     ZERO_UUID,
 )
 
-from airflow import DAG
-from airflow.models import Variable
-from airflow.operators.python import PythonOperator
-
-from elasticsearch import helpers
-from elasticsearch.helpers import BulkIndexError
-
 DAG_ID = "product_provider"
 
 DICTIONARY_NAME = "product"
 INDEX_NAME = "product_v2"
+
 S3_FILE_NAME = f"{DAG_ID}/product_provider.json"
 
 

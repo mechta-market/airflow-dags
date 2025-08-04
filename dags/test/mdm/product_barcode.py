@@ -1,5 +1,12 @@
 import logging
 from datetime import datetime
+
+from airflow.sdk import DAG, Variable
+from airflow.operators.python import PythonOperator
+
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
+
 from helpers.utils import (
     elastic_conn,
     request_to_1c,
@@ -9,17 +16,14 @@ from helpers.utils import (
     ZERO_UUID,
 )
 
-from airflow import DAG
-from airflow.models import Variable
-from airflow.operators.python import PythonOperator
-
-
-from elasticsearch import helpers
-from elasticsearch.helpers import BulkIndexError
-
-
 DAG_ID = "product_barcode"
+default_args = {
+    "owner": "Amir",
+    "depends_on_past": False,
+}
+
 DICTIONARY_NAME = "product_barcode"
+
 S3_FILE_NAME = f"{DAG_ID}/product_barcode.json"
 
 NORMALIZE_FIELDS = []
@@ -86,11 +90,6 @@ def upsert_to_es_callable():
     except BulkIndexError as bulk_error:
         logging.error(f"Bulk update failed: {bulk_error}")
 
-
-default_args = {
-    "owner": "Amir",
-    "depends_on_past": False,
-}
 
 with DAG(
     dag_id=DAG_ID,

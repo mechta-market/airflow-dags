@@ -81,7 +81,7 @@ def put_to_s3(
         bytes_data=data_bytes, key=s3_key, bucket_name=BUCKET_NAME, replace=True
     )
 
-    logging.info(f"Data saved to s3://{BUCKET_NAME}/{s3_key}")
+    logging.info(f"data saved to s3://{BUCKET_NAME}/{s3_key}")
 
 
 def get_from_s3(s3_key: str) -> Any:

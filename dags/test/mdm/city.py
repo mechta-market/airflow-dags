@@ -1,5 +1,12 @@
 import logging
 from datetime import datetime
+
+from airflow.sdk import DAG, Variable
+from airflow.operators.python import PythonOperator
+
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
+
 from helpers.utils import (
     elastic_conn,
     request_to_1c,
@@ -9,18 +16,17 @@ from helpers.utils import (
     ZERO_UUID,
 )
 
-from airflow import DAG
-from airflow.models import Variable
-from airflow.operators.python import PythonOperator
-
-from elasticsearch import helpers
-from elasticsearch.helpers import BulkIndexError
-
 DAG_ID = "city"
+default_args = {
+    "owner": "Amir",
+    "depends_on_past": False,
+}
+
 DICTIONARY_NAME = "city"
 WAREHOUSE_INDEX_NAME = "warehouse"
 SUBDIVISION_INDEX_NAME = "subdivision"
 NORMALIZE_FIELDS = ["cb_subdivision_id", "i_shop_subdivision_id", "organisation_id"]
+
 S3_FILE_NAME = f"{DAG_ID}/city.json"
 
 
@@ -29,7 +35,7 @@ def fetch_data_callable() -> None:
     response = request_to_1c(host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME)
     if not response.get("success", False):
         logging.error(
-            f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"
+            f"error: {response.get('error_code')}; desc: {response.get('desc')}"
         )
         return
 
@@ -152,7 +158,7 @@ def upsert_city_ids_in_warehouse_callable():
             }
         )
 
-    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    logging.info(f"actions count={len(actions)}")
     if actions:
         try:
             success, errors = helpers.bulk(
@@ -163,17 +169,12 @@ def upsert_city_ids_in_warehouse_callable():
                 raise_on_error=False,
                 raise_on_exception=False,
             )
-            logging.info(f"Successfully updated {success} documents.")
+            logging.info(f"successfully updated documents count={success}")
             if errors:
-                logging.error(f"Errors encountered: {errors}")
+                logging.error(f"errors encountered: {errors}")
         except BulkIndexError as bulk_error:
-            logging.error(f"Bulk update failed: {bulk_error}")
+            logging.error(f"bulk update failed: {bulk_error}")
 
-
-default_args = {
-    "owner": "Amir",
-    "depends_on_past": False,
-}
 
 with DAG(
     dag_id=DAG_ID,

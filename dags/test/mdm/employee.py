@@ -11,8 +11,7 @@ from airflow.sdk import DAG, Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import fetch_with_retry
-from helpers.utils import elastic_conn, put_to_s3, get_from_s3
+from helpers.utils import elastic_conn, put_to_s3, get_from_s3, fetch_with_retry
 
 DAG_ID = "employee"
 DEFAULT_ARGS = {
@@ -27,8 +26,6 @@ PAGE_SIZE = 1000
 
 S3_EXTRACT = f"{DAG_ID}/extracted.json"
 S3_TRANSFORM = f"{DAG_ID}/transformed.json"
-
-logging.basicConfig(level=logging.INFO)
 
 
 class DocumentEmployee:
@@ -74,7 +71,7 @@ def extract_data_callable():
             )
             return (total + PAGE_SIZE - 1) // PAGE_SIZE
         except requests.RequestException as e:
-            logging.error("Failed to fetch total pages: %s", e)
+            logging.error("failed to fetch total pages: %s", e)
             raise
 
     def fetch_page(page: int) -> List[Dict]:
@@ -98,14 +95,14 @@ def extract_data_callable():
                 extracted_employees.extend(page_items)
                 logging.info(f"page {page} is processed")
             except Exception as e:
-                logging.error(f"Error fetching page {page}: {e}")
+                logging.error(f"error fetching page {page}: {e}")
                 raise
 
     if not extracted_employees:
         raise ValueError("no employees extracted")
 
     put_to_s3(data=extracted_employees, s3_key=S3_EXTRACT)
-    logging.info(f"extracted employees count: {len(extracted_employees)}")
+    logging.info(f"extracted employees count={len(extracted_employees)}")
 
 
 def transform_data_callable():
@@ -120,11 +117,11 @@ def transform_data_callable():
             try:
                 transformed_employees.append(future.result())
             except Exception as e:
-                logging.error("Error transforming employee: %s", e)
+                logging.error("error transforming employee: %s", e)
                 raise
 
     put_to_s3(data=transformed_employees, s3_key=S3_TRANSFORM)
-    logging.info(f"transformed employees count: {len(transformed_employees)}")
+    logging.info(f"transformed employees count={len(transformed_employees)}")
 
 
 def delete_different_data_callable():
@@ -158,7 +155,7 @@ def delete_different_data_callable():
             client.clear_scroll(scroll_id=scroll_id)
 
     ids_to_delete = existing_ids - transformed_employees_ids
-    logging.info(f"count of ids to delete: {len(ids_to_delete)}")
+    logging.info(f"employee ids to delete count={len(ids_to_delete)}")
 
     delete_actions = [
         {
@@ -222,7 +219,7 @@ def enrich_subdivision_id_utp_callable():
             scroll="2m",
         )
     except Exception as e:
-        logging.error(f"Failed to search subdivision: {e}")
+        logging.error(f"failed to search subdivision: {e}")
         raise
 
     sub_scroll = sub_resp["_scroll_id"]
@@ -232,7 +229,7 @@ def enrich_subdivision_id_utp_callable():
         try:
             resp = client.scroll(scroll_id=sub_scroll, scroll="2m")
         except Exception as e:
-            logging.error(f"Error during subdivision scroll: {e}")
+            logging.error(f"error during subdivision scroll: {e}")
             raise
         batch = resp["hits"]["hits"]
         if not batch:
@@ -264,7 +261,7 @@ def enrich_subdivision_id_utp_callable():
                 scroll="2m",
             )
         except Exception as e:
-            logging.error(f"Error searching employees for subdivision {zup_id}: {e}")
+            logging.error(f"error searching employees for subdivision {zup_id}: {e}")
             raise
 
         emp_scroll = emp_resp["_scroll_id"]
@@ -286,7 +283,7 @@ def enrich_subdivision_id_utp_callable():
             try:
                 resp = client.scroll(scroll_id=emp_scroll, scroll="2m")
             except Exception as e:
-                logging.error(f"Error during employee scroll for {zup_id}: {e}")
+                logging.error(f"error during employee scroll for {zup_id}: {e}")
                 raise
             emp_hits = resp["hits"]["hits"]
 
@@ -303,14 +300,14 @@ def enrich_subdivision_id_utp_callable():
                 raise_on_error=False,
                 raise_on_exception=False,
             )
-            logging.info(f"Successfully updated {success} documents.")
+            logging.info(f"successfully updated documents count={success}")
             if errors:
-                logging.error(f"Errors encountered: {errors}")
+                logging.error(f"errors encountered: {errors}")
         except BulkIndexError as bulk_error:
-            logging.error(f"Bulk update failed: {bulk_error}")
+            logging.error(f"bulk update failed: {bulk_error}")
             raise
     else:
-        logging.info("No subdivision_id_utp updates needed.")
+        logging.info("no subdivision_id_utp updates needed")
 
 
 with DAG(

@@ -1,5 +1,9 @@
 import logging
 from datetime import datetime
+
+from airflow.sdk import DAG, Variable
+from airflow.operators.python import PythonOperator
+
 from helpers.utils import (
     elastic_conn,
     request_to_1c,
@@ -9,14 +13,15 @@ from helpers.utils import (
     ZERO_UUID,
 )
 
-from airflow import DAG
-from airflow.models import Variable
-from airflow.operators.python import PythonOperator
-
-
 DAG_ID = "node"
+default_args = {
+    "owner": "Amir",
+    "depends_on_past": False,
+}
+
 DICTIONARY_NAME = "node"
 NORMALIZE_FIELDS = ["parent_id"]
+
 S3_FILE_NAME = f"{DAG_ID}/node.json"
 
 
@@ -25,7 +30,7 @@ def fetch_data_callable() -> None:
     response = request_to_1c(host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME)
     if not response.get("success", False):
         logging.error(
-            f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"
+            f"error: {response.get('error_code')}; desc: {response.get('desc')}"
         )
         return
 
@@ -77,11 +82,6 @@ def upsert_to_es_callable():
             body={"doc": item, "doc_as_upsert": True},
         )
 
-
-default_args = {
-    "owner": "Amir",
-    "depends_on_past": False,
-}
 
 with DAG(
     dag_id=DAG_ID,

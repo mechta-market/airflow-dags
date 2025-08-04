@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 import requests
 from typing import Any
 
@@ -43,7 +44,7 @@ def request_to_site_api(host: str, endpoint: str) -> dict:
     response = requests.get(url)
     response.raise_for_status()
     if not response.status_code < 300:
-        logging.error(f"ERROR_CODE: {response.status_code}")
+        logging.error(f"error code: {response.status_code}")
         return
     return response.json()
 
@@ -55,7 +56,7 @@ def request_to_nsi_api(host: str, endpoint: str) -> dict:
     response = requests.get(url, timeout=30)
     response.raise_for_status()
     if not response.status_code < 300:
-        logging.error(f"ERROR_CODE: {response.status_code}")
+        logging.error(f"error code: {response.status_code}")
         return
     return response.json()
 
@@ -91,3 +92,16 @@ def get_from_s3(s3_key: str) -> Any:
     file_content = file_obj.get()["Body"].read()
     items = json.loads(file_content)
     return items
+
+
+def fetch_with_retry(url: str, params=None, retries=3):
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, params=params, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException:
+            if attempt < retries - 1:
+                time.sleep(1 * (attempt + 1))
+            else:
+                raise

@@ -13,8 +13,6 @@ from airflow.utils.trigger_rule import TriggerRule
 
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
-# DAG parameters
-
 DAG_ID = "product_price"
 default_args = {
     "owner": "Olzhas",
@@ -22,8 +20,6 @@ default_args = {
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
 }
-
-# Constants
 
 INDEX_NAME = "product_v2"
 
@@ -37,12 +33,6 @@ S3_FILE_NAME_BASE_PRICE = f"{DAG_ID}/base_price.json"
 S3_FILE_NAME_FINAL_PRICE = f"{DAG_ID}/final_price.json"
 
 ERR_NO_ROWS = "err_no_rows"
-
-# Configurations
-
-logging.basicConfig(level=logging.INFO)
-
-# Functions
 
 
 class DocumentBasePrice:
@@ -105,10 +95,14 @@ def get_product_ids_callable():
             client.clear_scroll(scroll_id=scroll_id)
 
     product_ids = list(existing_ids)
+    logging.info(f"product_ids count={len(product_ids)}")
+
+    if len(product_ids) == 0:
+        raise ValueError("extracted product_ids count=0")
 
     put_to_s3(data=product_ids, s3_key=S3_FILE_NAME_PRODUCT_IDS)
 
-    logging.info(f"extracted product_ids count: {len(product_ids)}")
+    logging.info(f"extracted product_ids count={len(product_ids)}")
 
 
 def get_city_callable():
@@ -147,7 +141,7 @@ def get_city_callable():
 
     put_to_s3(data=cities_dict, s3_key=S3_FILE_NAME_CITIES)
 
-    logging.info(f"extracted cities count: {len(cities_dict)}")
+    logging.info(f"extracted cities count={len(cities_dict)}")
 
 
 def get_subdivision_callable():
@@ -189,7 +183,7 @@ def get_subdivision_callable():
 
     put_to_s3(data=subdivisions_dict, s3_key=S3_FILE_NAME_SUBDIVISIONS)
 
-    logging.info(f"extracted subdivisions count: {len(subdivisions_dict)}")
+    logging.info(f"extracted subdivisions count={len(subdivisions_dict)}")
 
 
 def transform_base_price_callable():
@@ -284,7 +278,7 @@ def transform_base_price_callable():
     put_to_s3(data=product_base_price_dict, s3_key=S3_FILE_NAME_BASE_PRICE)
 
     logging.info(
-        f"transformed product_base_prices count: {len(product_base_price_dict)}"
+        f"transformed product_base_prices count={len(product_base_price_dict)}"
     )
 
 
@@ -392,7 +386,7 @@ def transform_final_price_callable():
     put_to_s3(data=product_final_price_dict, s3_key=S3_FILE_NAME_FINAL_PRICE)
 
     logging.info(
-        f"transformed product_final_prices count: {len(product_final_price_dict)}"
+        f"transformed product_final_prices count={len(product_final_price_dict)}"
     )
 
 
@@ -417,7 +411,7 @@ def load_base_price_callable():
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        logging.info(f"update success, updated documents count: {success}")
+        logging.info(f"update success, updated documents count={success}")
         if errors:
             logging.error(f"errors encountered during bulk update: {errors}")
     except BulkIndexError as bulk_error:
@@ -446,7 +440,7 @@ def load_final_price_callable():
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        logging.info(f"update success, updated documents count: {success}")
+        logging.info(f"update success, updated documents count={success}")
         if errors:
             logging.error(f"errors encountered during bulk update: {errors}")
     except BulkIndexError as bulk_error:

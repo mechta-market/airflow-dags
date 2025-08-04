@@ -1,18 +1,19 @@
 import logging
 from datetime import datetime
-from helpers.utils import request_to_site_api, put_to_s3, get_from_s3
 
-from airflow import DAG
-from airflow.models import Variable
+from airflow.sdk import DAG, Variable
 from airflow.operators.python import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
+from helpers.utils import request_to_site_api, put_to_s3, get_from_s3
+
 DAG_ID = "product_sort"
 
 INDEX_NAME = "product_v2"
+
 S3_FILE_NAME = f"{DAG_ID}/product_sort.json"
 
 
@@ -42,7 +43,7 @@ def upsert_to_es_callable():
         for item in items
         if item.get("id")
     ]
-    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    logging.info(f"actions count={len(actions)}")
 
     try:
         success, errors = helpers.bulk(
@@ -53,11 +54,11 @@ def upsert_to_es_callable():
             raise_on_error=False,
             raise_on_exception=False,
         )
-        logging.info(f"Successfully updated {success} documents.")
+        logging.info(f"successfully updated documents count={success}")
         if errors:
-            logging.error(f"Errors encountered: {errors}")
+            logging.error(f"errors encountered: {errors}")
     except BulkIndexError as bulk_error:
-        logging.error(f"Bulk update failed: {bulk_error}")
+        logging.error(f"bulk update failed: {bulk_error}")
 
 
 default_args = {

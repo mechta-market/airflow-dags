@@ -10,10 +10,7 @@ from airflow.sdk import DAG, Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
-from filter.utils import (
-    fetch_with_retry,
-)
-from helpers.utils import elastic_conn, put_to_s3, get_from_s3
+from helpers.utils import elastic_conn, put_to_s3, get_from_s3, fetch_with_retry
 
 # DAG parameters
 
@@ -34,10 +31,6 @@ TARGET_LANGUAGES = ["ru", "kz"]
 
 S3_FILE_NAME_EXTRACTED_DATA = f"{DAG_ID}/extracted_data.json"
 S3_FILE_NAME_TRANSFORMED_PRODUCTS = f"{DAG_ID}/transformed_products.json"
-
-# Configurations
-
-logging.basicConfig(level=logging.INFO)
 
 # Functions
 
@@ -383,7 +376,7 @@ def extract_data_callable():
             )
             return (total_count + PAGE_SIZE - 1) // PAGE_SIZE
         except requests.RequestException as e:
-            logging.error(f"Failed to fetch total pages: {e}")
+            logging.error(f"failed to fetch total pages: {e}")
             raise
 
     def fetch_page(page: int) -> List[str]:
@@ -442,13 +435,12 @@ def extract_data_callable():
                 logging.error(f"error in processing product details: {e}")
                 raise
 
-    if len(extracted_products) == 0:
-        logging.error("No products extracted, failing DAG run")
-        raise ValueError("No products extracted from NSI service")
+    if len(product_ids) == 0:
+        raise ValueError("extracted product_ids count=0")
 
     put_to_s3(data=extracted_products, s3_key=S3_FILE_NAME_EXTRACTED_DATA)
 
-    logging.info(f"extracted products count: {len(extracted_products)}")
+    logging.info(f"extracted products count={len(extracted_products)}")
 
 
 def transform_data_callable():
@@ -471,7 +463,7 @@ def transform_data_callable():
 
     put_to_s3(data=transformed_products, s3_key=S3_FILE_NAME_TRANSFORMED_PRODUCTS)
 
-    logging.info(f"transformed products count: {len(transformed_products)}")
+    logging.info(f"transformed products count={len(transformed_products)}")
 
 
 def delete_different_data_callable():
@@ -508,6 +500,7 @@ def delete_different_data_callable():
             client.clear_scroll(scroll_id=scroll_id)
 
     ids_to_delete = existing_ids - transformed_product_ids
+    logging.info(f"product ids to delete count={len(ids_to_delete)}")
 
     delete_actions = [
         {
@@ -523,7 +516,7 @@ def delete_different_data_callable():
             success, errors = helpers.bulk(
                 client, delete_actions, refresh="wait_for", stats_only=False
             )
-            logging.info(f"delete success, deleted document count: {success}")
+            logging.info(f"delete success, deleted document count={success}")
             if errors:
                 logging.error(f"error during bulk delete: {errors}")
         except Exception as bulk_error:
@@ -553,7 +546,7 @@ def load_data_callable():
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        logging.info(f"update success, updated documents count: {success}")
+        logging.info(f"update success, updated documents count={success}")
         if errors:
             logging.error(f"error during bulk update: {errors}")
     except Exception as bulk_error:

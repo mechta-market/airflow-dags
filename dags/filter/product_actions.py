@@ -14,6 +14,10 @@ from elasticsearch.helpers import BulkIndexError
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
 DAG_ID = "product_actions"
+default_args = {
+    "owner": "Sultan",
+    "depends_on_past": False,
+}
 
 INDEX_NAME = "product_v2"
 
@@ -175,11 +179,6 @@ def upsert_to_es_callable():
     except BulkIndexError as bulk_error:
         logging.error(f"bulk update failed: {bulk_error}")
 
-
-default_args = {
-    "owner": "Sultan",
-    "depends_on_past": False,
-}
 
 with DAG(
     dag_id=DAG_ID,

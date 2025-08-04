@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from elasticsearch import helpers
-from elasticsearch.helpers import BulkIndexError
-
 from airflow.sdk import DAG, Variable
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
 
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
@@ -18,7 +18,7 @@ default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
     "retries": 1,
-    "retry_delay": timedelta(minutes=2),
+    "retry_delay": timedelta(minutes=1),
 }
 
 INDEX_NAME = "product_v2"
@@ -292,7 +292,9 @@ def transform_final_price_callable():
 
     product_final_price_dict: Dict[str, List[Dict[str, Any]]] = {}
 
-    def process_product_final_price(product_id: str) -> tuple[str, List[Dict[str, Any]]]:
+    def process_product_final_price(
+        product_id: str,
+    ) -> tuple[str, List[Dict[str, Any]]]:
         final_price = {}
         spec_final_prices = []
 

@@ -4,12 +4,12 @@ from typing import Any, Dict, List
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from elasticsearch import helpers
-from elasticsearch.helpers import BulkIndexError
-
 from airflow.sdk import DAG, Variable
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+
+from elasticsearch import helpers
+from elasticsearch.helpers import BulkIndexError
 
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 

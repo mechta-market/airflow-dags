@@ -34,7 +34,7 @@ def fetch_data_callable() -> None:
     response = request_to_1c(host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME)
     if not response.get("success", False):
         logging.error(
-            f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"
+            f"error: {response.get('error_code')}; desc: {response.get('desc')}"
         )
         return
 
@@ -78,17 +78,17 @@ def upsert_to_es_callable():
         for item in items
         if item.get("product_id")
     ]
-    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    logging.info(f"actions count={len(actions)}")
 
     try:
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        logging.info(f"Successfully updated {success} documents.")
+        logging.info(f"successfully updated documents={success}")
         if errors:
-            logging.error(f"Errors encountered: {errors}")
+            logging.error(f"errors encountered: {errors}")
     except BulkIndexError as bulk_error:
-        logging.error(f"Bulk update failed: {bulk_error}")
+        logging.error(f"bulk update failed: {bulk_error}")
 
 
 with DAG(

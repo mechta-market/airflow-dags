@@ -52,7 +52,7 @@ def fetch_data_callable():
     total_pages = (total_count + page_size - 1) // page_size
     logging.info(f"total_pages = {total_pages}")
     logging.info(
-        f"initial_response data: len={len(initial_payload.get("products"))}, meta= {initial_payload.get("meta")}"
+        f"initial_response data: len={len(initial_payload.get("products"))}, meta={initial_payload.get("meta")}"
     )
 
     all_results = initial_payload.get("products", [])
@@ -65,12 +65,12 @@ def fetch_data_callable():
         for future in as_completed(futures):
             try:
                 result = future.result()
-                logging.info(f"Page {futures[future]} loaded with {len(result)} items")
+                logging.info(f"page {futures[future]} loaded items count={len(result)}")
                 all_results.extend(result)
             except Exception as e:
-                logging.error(f"Error loading page {futures[future]}: {e}")
+                logging.error(f"error loading page {futures[future]}: {e}")
 
-    logging.info(f"Fetched data: len={len(all_results)}")
+    logging.info(f"fetched data count={len(all_results)}")
     put_to_s3(data=all_results, s3_key=S3_FILE_NAME)
 
 
@@ -127,14 +127,14 @@ def delete_previous_data_callable():
             raise_on_error=False,
             raise_on_exception=False,
         )
-        logging.info(f"delete success, deleted document count: {success}")
+        logging.info(f"delete success, deleted document count={success}")
         if errors:
             logging.error(f"error during bulk delete: {errors}")
     except Exception as bulk_error:
         logging.error(f"bulk delete failed, error: {bulk_error}")
         raise
 
-    logging.info(f"Updated {len(ids_to_delete)} fields to empty actions")
+    logging.info(f"updated {len(ids_to_delete)} fields to empty actions")
 
 
 def upsert_to_es_callable():
@@ -142,7 +142,7 @@ def upsert_to_es_callable():
 
     if not items:
         return
-    logging.info(f"items LEN={len(items)}")
+    logging.info(f"items count={len(items)}")
 
     hosts = ["http://mdm.default:9200"]
     es_hook = ElasticsearchPythonHook(hosts=hosts)
@@ -158,7 +158,7 @@ def upsert_to_es_callable():
         for item in items
         if item.get("id")
     ]
-    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    logging.info(f"actions count={len(actions)}")
 
     try:
         success, errors = helpers.bulk(
@@ -169,11 +169,11 @@ def upsert_to_es_callable():
             raise_on_error=False,
             raise_on_exception=False,
         )
-        logging.info(f"Successfully updated {success} documents.")
+        logging.info(f"successfully updated documents count={success}")
         if errors:
-            logging.error(f"Errors encountered: {errors}")
+            logging.error(f"errors encountered: {errors}")
     except BulkIndexError as bulk_error:
-        logging.error(f"Bulk update failed: {bulk_error}")
+        logging.error(f"bulk update failed: {bulk_error}")
 
 
 default_args = {

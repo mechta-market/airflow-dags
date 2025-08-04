@@ -44,7 +44,7 @@ def request_to_site_api(host: str, endpoint: str) -> dict:
     response = requests.get(url)
     response.raise_for_status()
     if not response.status_code < 300:
-        logging.error(f"ERROR_CODE: {response.status_code}")
+        logging.error(f"error code: {response.status_code}")
         return
     return response.json()
 
@@ -56,7 +56,7 @@ def request_to_nsi_api(host: str, endpoint: str) -> dict:
     response = requests.get(url, timeout=30)
     response.raise_for_status()
     if not response.status_code < 300:
-        logging.error(f"ERROR_CODE: {response.status_code}")
+        logging.error(f"error code: {response.status_code}")
         return
     return response.json()
 

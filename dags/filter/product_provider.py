@@ -55,7 +55,7 @@ def normalize_data_callable() -> None:
         normalize = {"id": item.get("id"), "provider": item.get("e_product_info")}
         normalized.append(normalize)
 
-    logging.info(f"normalized: {normalized}")
+    logging.info(f"normalized documents count={normalized}")
     put_to_s3(data=normalized, s3_key=S3_FILE_NAME)
 
 
@@ -77,17 +77,17 @@ def upsert_to_es_callable():
         for item in items
         if item.get("id")
     ]
-    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    logging.info(f"action count={len(actions)}")
 
     try:
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        logging.info(f"Successfully updated {success} documents.")
+        logging.info(f"successfully updated documents count={success}")
         if errors:
-            logging.error(f"Errors encountered: {errors}")
+            logging.error(f"errors encountered: {errors}")
     except BulkIndexError as bulk_error:
-        logging.error(f"Bulk update failed: {bulk_error}")
+        logging.error(f"bulk update failed: {bulk_error}")
 
 
 default_args = {

@@ -263,11 +263,11 @@ def load_data_callable():
         success, errors = helpers.bulk(
             client, actions, refresh="wait_for", stats_only=False
         )
-        logging.info(f"Successfully updated {success} documents.")
+        logging.info(f"successfully updated documents count={success}")
         if errors:
-            logging.error(f"Errors encountered during bulk update: {errors}")
+            logging.error(f"errors encountered during bulk update: {errors}")
     except BulkIndexError as bulk_error:
-        logging.error(f"Bulk update failed: {bulk_error}")
+        logging.error(f"bulk update failed: {bulk_error}")
         raise
 
 

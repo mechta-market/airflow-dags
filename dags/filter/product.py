@@ -380,7 +380,7 @@ def extract_data_callable():
             )
             return (total_count + PAGE_SIZE - 1) // PAGE_SIZE
         except requests.RequestException as e:
-            logging.error(f"Failed to fetch total pages: {e}")
+            logging.error(f"failed to fetch total pages: {e}")
             raise
 
     def fetch_page(page: int) -> List[str]:
@@ -440,8 +440,7 @@ def extract_data_callable():
                 raise
 
     if len(extracted_products) == 0:
-        logging.error("No products extracted, failing DAG run")
-        raise ValueError("No products extracted from NSI service")
+        raise ValueError("no products extracted from source service")
 
     put_to_s3(data=extracted_products, s3_key=S3_FILE_NAME_EXTRACTED_DATA)
 

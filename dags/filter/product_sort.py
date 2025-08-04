@@ -43,7 +43,7 @@ def upsert_to_es_callable():
         for item in items
         if item.get("id")
     ]
-    logging.info(f"ACTIONS COUNT {len(actions)}.")
+    logging.info(f"actions count={len(actions)}")
 
     try:
         success, errors = helpers.bulk(
@@ -54,11 +54,11 @@ def upsert_to_es_callable():
             raise_on_error=False,
             raise_on_exception=False,
         )
-        logging.info(f"Successfully updated {success} documents.")
+        logging.info(f"successfully updated documents count={success}")
         if errors:
-            logging.error(f"Errors encountered: {errors}")
+            logging.error(f"errors encountered: {errors}")
     except BulkIndexError as bulk_error:
-        logging.error(f"Bulk update failed: {bulk_error}")
+        logging.error(f"bulk update failed: {bulk_error}")
 
 
 default_args = {

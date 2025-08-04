@@ -30,7 +30,7 @@ def fetch_data_callable() -> None:
     response = request_to_1c(host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME)
     if not response.get("success", False):
         logging.error(
-            f"Error: {response.get('error_code')}; Desc: {response.get('desc')}"
+            f"error: {response.get('error_code')}; desc: {response.get('desc')}"
         )
         return
 

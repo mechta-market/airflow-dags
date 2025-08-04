@@ -7,8 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
 
-from airflow import DAG
-from airflow.models import Variable
+from airflow.sdk import DAG, Variable
 from airflow.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 

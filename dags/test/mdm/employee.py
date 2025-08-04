@@ -28,6 +28,8 @@ PAGE_SIZE = 1000
 S3_EXTRACT = f"{DAG_ID}/extracted.json"
 S3_TRANSFORM = f"{DAG_ID}/transformed.json"
 
+logging.basicConfig(level=logging.INFO)
+
 
 class DocumentEmployee:
     def __init__(self, p: Dict):
@@ -84,7 +86,7 @@ def extract_data_callable():
 
     total_pages = get_total_pages()
     extracted_employees: List[Dict] = []
-    
+
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {
             executor.submit(fetch_page, page): page for page in range(total_pages)

@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from elasticsearch import helpers
 
 from airflow.sdk import DAG, Variable
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 
 from helpers.utils import elastic_conn, put_to_s3, get_from_s3, fetch_with_retry

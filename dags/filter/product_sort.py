@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 
 from airflow.sdk import DAG, Variable
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 from elasticsearch import helpers
@@ -11,13 +11,17 @@ from elasticsearch.helpers import BulkIndexError
 from helpers.utils import request_to_site_api, put_to_s3, get_from_s3
 
 DAG_ID = "product_sort"
+default_args = {
+    "owner": "Sultan",
+    "depends_on_past": False,
+}
 
 INDEX_NAME = "product_v2"
 
 S3_FILE_NAME = f"{DAG_ID}/product_sort.json"
 
 
-def fetch_data_callable():
+def fetch_data_callable() -> None:
     response = request_to_site_api(
         host=Variable.get("site_api_host"), endpoint="v2/airflow/product/sort"
     )
@@ -60,11 +64,6 @@ def upsert_to_es_callable():
     except BulkIndexError as bulk_error:
         logging.error(f"bulk update failed: {bulk_error}")
 
-
-default_args = {
-    "owner": "Sultan",
-    "depends_on_past": False,
-}
 
 with DAG(
     dag_id=DAG_ID,

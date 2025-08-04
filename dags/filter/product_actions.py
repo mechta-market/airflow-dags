@@ -5,7 +5,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from airflow.sdk import DAG, Variable
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
 from elasticsearch import helpers
@@ -20,7 +20,7 @@ INDEX_NAME = "product_v2"
 S3_FILE_NAME = f"{DAG_ID}/product_actions.json"
 
 
-def fetch_data_callable():
+def fetch_data_callable() -> None:
     url = f"{Variable.get("site_api_host")}/v2/airflow/product/action"
     page_size = 100
 

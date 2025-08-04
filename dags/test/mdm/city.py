@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 
 from airflow.sdk import DAG, Variable
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError

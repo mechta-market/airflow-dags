@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 
 from airflow.sdk import DAG, Variable
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
@@ -16,6 +16,10 @@ from helpers.utils import (
 )
 
 DAG_ID = "product_provider"
+default_args = {
+    "owner": "Amir",
+    "depends_on_past": False,
+}
 
 DICTIONARY_NAME = "product"
 INDEX_NAME = "product_v2"
@@ -23,7 +27,7 @@ INDEX_NAME = "product_v2"
 S3_FILE_NAME = f"{DAG_ID}/product_provider.json"
 
 
-def fetch_data_callable(**context) -> None:
+def fetch_data_callable() -> None:
     """Получаем данные из 1c и сохраняем в XCom."""
     response = request_to_1c_with_data(
         host=Variable.get("1c_gw_host"), dic_name=DICTIONARY_NAME, payload={"type": 2}
@@ -89,11 +93,6 @@ def upsert_to_es_callable():
     except BulkIndexError as bulk_error:
         logging.error(f"bulk update failed: {bulk_error}")
 
-
-default_args = {
-    "owner": "Amir",
-    "depends_on_past": False,
-}
 
 with DAG(
     dag_id=DAG_ID,

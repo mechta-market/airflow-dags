@@ -46,6 +46,8 @@ class DocumentEmployee:
         self.birth_date = p.get("birth_date", "")
         self.position_id = p.get("position_id", "")
         self.position_name = p.get("position_name", "")
+        self.hire_date = p.get("hire_date", "")
+        self.available_vacation_days = p.get("available_vacation_days", "")
         self.active = p.get("active", False)
         self.status = p.get("status", "")
 

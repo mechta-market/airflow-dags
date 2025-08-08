@@ -43,23 +43,33 @@ class DocumentEmployee:
         self.first_name = p.get("first_name", "")
         self.middle_name = p.get("middle_name", "")
         self.gender = p.get("gender", "")
-        self.birth_date = self._check_date(p, "birth_date")
+
+        if self._check_date(p, "birth_date"):
+            self.birth_date = p.get("birth_date")
+        else:
+            self.birth_date = None
+
         self.position_id = p.get("position_id", "")
         self.position_name = p.get("position_name", "")
-        self.hire_date = self._check_date(p, "hire_date")
+
+        if self._check_date(p, "hire_date"):
+            self.hire_date =  p.get("hire_date")
+        else:
+            self.hire_date = None
+
         self.available_vacation_days = p.get("available_vacation_days", "")
         self.active = p.get("active", False)
         self.status = p.get("status", "")
 
-    def _check_date(self, p: Dict, name: str) -> str:
+    def _check_date(self, p: Dict, name: str) -> bool:
         date = p.get(name, "")
         try:
             datetime.strptime(date, '%Y-%d-%m').date()
         except Exception as e:
             logging.error(f"error _check_date id:{self.id}, name: {name}, error: {e}")
-            return ""
+            return False
 
-        return date
+        return True
 
 def encode_employee(p: Dict) -> Dict:
     return DocumentEmployee(p).__dict__

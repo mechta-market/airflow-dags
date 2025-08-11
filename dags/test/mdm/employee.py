@@ -1,5 +1,6 @@
 import logging
 import requests
+from dateutil.parser import parse
 from typing import List, Dict
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -61,8 +62,9 @@ class DocumentEmployee:
     def _check_date(self, p: Dict, name: str) -> bool:
         date = p.get(name, "")
         try:
-            datetime.strptime(date, '%Y-%m-%d').date()
+            parse(date)
         except Exception as e:
+            logging.error(f"id: {self.id} error parsing date {name}={date}: {e}")
             return False
 
         return True

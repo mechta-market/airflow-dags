@@ -357,7 +357,7 @@ def encode_document_product(p: dict) -> dict:
 def extract_data_callable():
     BASE_URL = Variable.get("nsi_host")
 
-    MAX_WORKERS = 2
+    MAX_WORKERS = 1
     PAGE_SIZE = 1000
 
     def get_total_pages() -> int:

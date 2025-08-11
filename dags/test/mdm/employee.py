@@ -64,6 +64,9 @@ class DocumentEmployee:
 
     def _check_date(self, p: Dict, name: str) -> bool:
         date = p.get(name, "")
+        if date == "":
+            return False
+
         try:
             parse(date)
         except Exception as e:

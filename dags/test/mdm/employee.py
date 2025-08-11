@@ -67,7 +67,6 @@ class DocumentEmployee:
         try:
             parse(date)
         except Exception as e:
-            logging.error(f"id: {self.id} error parsing date {name}={date}: {e}")
             return False
 
         return True
@@ -135,16 +134,23 @@ def transform_data_callable():
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(encode_employee, p) for p in collected_employees]
-        err_birth_date_count = 0
+        err_date_count = 0
         for future in as_completed(futures):
             try:
                 transformed_employees.append(future.result())
-                if future.result().get("birth_date") == "":
-                    err_birth_date_count += 1
+                if future.result().get("birth_date") is None:
+                    err_date_count += 1
+
+                if future.result().get("hire_date")  is None:
+                    err_date_count += 1
+
             except Exception as e:
                 logging.error("error transforming employee: %s", e)
                 raise
-        logging.error(f"birth_date is empty count={err_birth_date_count}")
+
+        if len(err_date_count) > 0:
+            logging.error(f"error parsing date count={err_date_count}")
+
     put_to_s3(data=transformed_employees, s3_key=S3_TRANSFORM)
     logging.info(f"transformed employees count={len(transformed_employees)}")
 

@@ -45,7 +45,10 @@ class DocumentEmployee:
         self.middle_name = p.get("middle_name", "")
         self.gender = p.get("gender", "")
 
-        self.birth_date = p.get("birth_date", "")
+        if self._check_date(p, "birth_date"):
+            self.birth_date = p.get("birth_date")
+        else:
+            self.birth_date = None
 
         self.position_id = p.get("position_id", "")
         self.position_name = p.get("position_name", "")

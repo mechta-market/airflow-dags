@@ -1,5 +1,6 @@
 import logging
 import requests
+from dateutil.parser import parse
 from typing import List, Dict
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -44,7 +45,10 @@ class DocumentEmployee:
         self.middle_name = p.get("middle_name", "")
         self.gender = p.get("gender", "")
 
-        self.birth_date = p.get("birth_date", "")
+        if self._check_date(p, "birth_date"):
+            self.birth_date = p.get("birth_date")
+        else:
+            self.birth_date = None
 
         self.position_id = p.get("position_id", "")
         self.position_name = p.get("position_name", "")
@@ -61,7 +65,7 @@ class DocumentEmployee:
     def _check_date(self, p: Dict, name: str) -> bool:
         date = p.get(name, "")
         try:
-            datetime.strptime(date, '%Y-%m-%d').date()
+            parse(date)
         except Exception as e:
             return False
 
@@ -130,16 +134,12 @@ def transform_data_callable():
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(encode_employee, p) for p in collected_employees]
-        err_birth_date_count = 0
         for future in as_completed(futures):
             try:
                 transformed_employees.append(future.result())
-                if future.result().get("birth_date") == "":
-                    err_birth_date_count += 1
             except Exception as e:
                 logging.error("error transforming employee: %s", e)
                 raise
-        logging.error(f"birth_date is empty count={err_birth_date_count}")
     put_to_s3(data=transformed_employees, s3_key=S3_TRANSFORM)
     logging.info(f"transformed employees count={len(transformed_employees)}")
 

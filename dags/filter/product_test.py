@@ -454,7 +454,7 @@ def extract_data_callable(**context):
 
 def transform_data_callable(**context):
     pages_count = context["ti"].xcom_pull(
-        task_ids="extract_data_callable", key="pages_count"
+        task_ids="extract_data_task", key="pages_count"
     )
 
     MAX_WORKERS = 5
@@ -556,7 +556,7 @@ def delete_different_data_callable():
 
 def load_data_callable(**context):
     pages_count = context["ti"].xcom_pull(
-        task_ids="extract_data_callable", key="pages_count"
+        task_ids="extract_data_task", key="pages_count"
     )
 
     client = elastic_conn(Variable.get("elastic_scheme"))

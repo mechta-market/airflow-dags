@@ -356,7 +356,7 @@ def encode_document_product(p: dict) -> dict:
 
 
 def extract_data_callable(**context):
-    MAX_WORKERS = 1
+    MAX_WORKERS = 2
     PAGE_SIZE = 1000
     BASE_URL = Variable.get("nsi_host")
 
@@ -385,19 +385,7 @@ def extract_data_callable(**context):
         params["list_params.page"] = page
         params["list_params.page_size"] = page_size
 
-        response = fetch_with_retry(
-            f"{BASE_URL}/product",
-            params={
-                "list_params.page": page,
-                "list_params.page_size": PAGE_SIZE,
-                "archived": False,
-                "list_params.sort": "id",
-            },
-        )
-
-        logging.info(
-            f"page={page}, page_size={page_size}, {len(response.get("results", []))}"
-        )
+        response = fetch_with_retry(f"{BASE_URL}/product", params=params)
 
         return [
             product["id"] for product in response.get("results", []) if "id" in product
@@ -429,9 +417,12 @@ def extract_data_callable(**context):
     # 0 .. (pages_count - 1)
     for page in range(pages_count):
         extracted_products: List[dict] = []
+
         page_ids = get_page_ids(page, PAGE_SIZE, product_list_params)
         if not page_ids:
             raise ValueError(f"no page_ids for page={page}")
+
+        logging.info(f"page={page}, page_size={PAGE_SIZE}, products_count={page_ids}")
 
         product_ids.extend(page_ids)
 
@@ -543,7 +534,7 @@ def delete_different_data_callable():
         if scroll_id:
             client.clear_scroll(scroll_id=scroll_id)
 
-    ids_to_delete = existing_ids - extracted_ids
+    ids_to_delete = existing_ids.difference(extracted_ids)
     logging.info(f"product ids to delete count={len(ids_to_delete)}")
 
     delete_actions = [

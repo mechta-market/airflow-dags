@@ -391,9 +391,7 @@ def extract_data_callable(**context):
         )
 
         return [
-            product["id"]
-            for product in response.get("results", [])
-            if isinstance(product, dict) and product.get("id") is not None
+            product["id"] for product in response.get("results", []) if "id" in product
         ]
 
     def get_product(id: str) -> dict:
@@ -405,8 +403,6 @@ def extract_data_callable(**context):
             "with_video": True,
             "with_pre_order": True,
             "with_similar_products": True,
-            # TODO: "with_product_parts": True,
-            # TODO: "with_service_parts": True,
         }
 
         return fetch_with_retry(url, params=params)
@@ -428,6 +424,9 @@ def extract_data_callable(**context):
         product_ids.extend(page_ids)
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            if not page_ids:
+                raise ValueError(f"no page_ids for page={page}")
+
             futures = [executor.submit(get_product, id) for id in page_ids]
             for f in as_completed(futures):
                 try:
@@ -438,11 +437,17 @@ def extract_data_callable(**context):
                     logging.error(f"error in processing product: {e}")
                     raise
 
+        if not extracted_products:
+            raise ValueError(f"no products for page={page}")
+
         s3_filename = S3_FILE_NAME_EXTRACTED_PRODUCTS_PAGE.format(
             DAG_ID=DAG_ID,
             page=page,
         )
         put_to_s3(data=extracted_products, s3_key=s3_filename)
+
+    if not product_ids:
+        raise ValueError("no product_ids provided")
 
     s3_filename = S3_FILE_NAME_EXTRACTED_PRODUCT_IDS.format(
         DAG_ID=DAG_ID,

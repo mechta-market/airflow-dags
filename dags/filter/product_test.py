@@ -390,6 +390,8 @@ def extract_data_callable(**context):
             params=params,
         )
 
+        logging.info(f"{len(response.get("results", []))}")
+
         return [
             product["id"] for product in response.get("results", []) if "id" in product
         ]
@@ -421,12 +423,12 @@ def extract_data_callable(**context):
     for page in range(pages_count):
         extracted_products: List[dict] = []
         page_ids = get_page_ids(page, PAGE_SIZE, product_list_params)
+        if not page_ids:
+            raise ValueError(f"no page_ids for page={page}")
+        
         product_ids.extend(page_ids)
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            if not page_ids:
-                raise ValueError(f"no page_ids for page={page}")
-
             futures = [executor.submit(get_product, id) for id in page_ids]
             for f in as_completed(futures):
                 try:

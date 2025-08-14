@@ -382,10 +382,15 @@ def extract_data_callable(**context):
         return total_count, (total_count + page_size - 1) // page_size
 
     def get_page_ids(page, page_size: int, params: dict[str, Any]) -> List[str]:
-        params["list_params.page"] = page
-        params["list_params.page_size"] = page_size
+        request_params = params.copy()
+        request_params.update({
+            "list_params.page": page,
+            "list_params.page_size": page_size,
+        })
 
-        response = fetch_with_retry(f"{BASE_URL}/product", params=params)
+        print(request_params)
+
+        response = fetch_with_retry(f"{BASE_URL}/product", params=request_params)
 
         return [
             product["id"] for product in response.get("results", []) if "id" in product

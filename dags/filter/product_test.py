@@ -373,7 +373,7 @@ def extract_data_callable(**context):
 
         response = requests.get(
             f"{BASE_URL}/product",
-            params=params,
+            params=request_params,
             timeout=15,
         )
         response.raise_for_status()
@@ -390,8 +390,6 @@ def extract_data_callable(**context):
             "list_params.page": page,
             "list_params.page_size": page_size,
         })
-
-        print(request_params)
 
         response = fetch_with_retry(f"{BASE_URL}/product", params=request_params)
 

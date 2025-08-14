@@ -428,7 +428,7 @@ def extract_data_callable(**context):
         if not page_ids:
             raise ValueError(f"no page_ids for page={page}")
 
-        logging.info(f"page={page}, page_size={PAGE_SIZE}, products_count={page_ids}")
+        logging.info(f"page={page}, page_size={PAGE_SIZE}, products_count={len(page_ids)}")
 
         product_ids.extend(page_ids)
 

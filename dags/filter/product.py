@@ -604,7 +604,7 @@ def load_data_callable(**context):
             success, errors = helpers.bulk(
                 client, actions, refresh="wait_for", stats_only=False
             )
-            logging.info(f"update success, updated documents count={success}")
+            logging.info(f"update success, page={page}, updated documents count={success}")
             if errors:
                 logging.error(f"error during bulk update: {errors}")
         except Exception as bulk_error:

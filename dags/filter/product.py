@@ -617,7 +617,7 @@ with DAG(
     default_args=default_args,
     description="DAG to upload products from NSI service to Elasticsearch index",
     start_date=datetime(2025, 6, 10),
-    schedule="0 */7 * * *",
+    schedule="0 */6 * * *",
     max_active_runs=1,
     catchup=False,
     tags=["elasticsearch", "nsi", "product"],

@@ -366,7 +366,10 @@ def extract_data_callable(**context):
     }
 
     def get_total_pages(page_size: int, params: dict[str, Any]) -> tuple[int, int]:
-        params["list_params.only_count"] = True
+        request_params = params.copy()
+        request_params.update({
+            "list_params.only_count": True,
+        })
 
         response = requests.get(
             f"{BASE_URL}/product",

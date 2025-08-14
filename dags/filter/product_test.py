@@ -387,10 +387,17 @@ def extract_data_callable(**context):
 
         response = fetch_with_retry(
             f"{BASE_URL}/product",
-            params=params,
+            params={
+                "list_params.page": page,
+                "list_params.page_size": PAGE_SIZE,
+                "archived": False,
+                "list_params.sort": "id",
+            },
         )
 
-        logging.info(f"{len(response.get("results", []))}")
+        logging.info(
+            f"page={page}, page_size={page_size}, {len(response.get("results", []))}"
+        )
 
         return [
             product["id"] for product in response.get("results", []) if "id" in product
@@ -425,7 +432,7 @@ def extract_data_callable(**context):
         page_ids = get_page_ids(page, PAGE_SIZE, product_list_params)
         if not page_ids:
             raise ValueError(f"no page_ids for page={page}")
-        
+
         product_ids.extend(page_ids)
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:

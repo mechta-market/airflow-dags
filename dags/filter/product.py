@@ -29,8 +29,9 @@ INDEX_NAME = "product_v2"
 DEFAULT_LANGUAGE = "ru"
 TARGET_LANGUAGES = ["ru", "kz"]
 
-S3_FILE_NAME_EXTRACTED_DATA = f"{DAG_ID}/extracted_data.json"
-S3_FILE_NAME_TRANSFORMED_PRODUCTS = f"{DAG_ID}/transformed_products.json"
+S3_FILE_NAME_EXTRACTED_PRODUCT_IDS = "{DAG_ID}/extracted_product_ids.json"
+S3_FILE_NAME_EXTRACTED_PRODUCTS_PAGE = "{DAG_ID}/extracted_products_{page}.json"
+S3_FILE_NAME_TRANSFORMED_PRODUCTS_PAGE = "{DAG_ID}/transformed_products_{page}.json"
 
 # Functions
 
@@ -354,45 +355,53 @@ def encode_document_product(p: dict) -> dict:
 # Tasks
 
 
-def extract_data_callable():
+def extract_data_callable(**context):
+    MAX_WORKERS = 2
+    PAGE_SIZE = 1000
     BASE_URL = Variable.get("nsi_host")
 
-    MAX_WORKERS = 1
-    PAGE_SIZE = 1000
+    product_list_params: dict[str, Any] = {
+        "list_params.sort": "id",
+        "archived": False,
+    }
 
-    def get_total_pages() -> int:
-        try:
-            response = requests.get(
-                f"{BASE_URL}/product",
-                params={
-                    "list_params.only_count": True,
-                    "archived": False,
-                },
-                timeout=10,
-            )
-            response.raise_for_status()
-            total_count = int(
-                response.json().get("pagination_info", {}).get("total_count", 0)
-            )
-            return (total_count + PAGE_SIZE - 1) // PAGE_SIZE
-        except requests.RequestException as e:
-            logging.error(f"failed to fetch total pages: {e}")
-            raise
-
-    def fetch_page(page: int) -> List[str]:
-        response = fetch_with_retry(
-            f"{BASE_URL}/product",
-            params={
-                "list_params.page": page,
-                "list_params.page_size": PAGE_SIZE,
-                "archived": False,
-            },
+    def get_total_pages(page_size: int, params: dict[str, Any]) -> tuple[int, int]:
+        request_params = params.copy()
+        request_params.update(
+            {
+                "list_params.only_count": True,
+            }
         )
+
+        response = requests.get(
+            f"{BASE_URL}/product",
+            params=request_params,
+            timeout=15,
+        )
+        response.raise_for_status()
+
+        total_count = int(
+            response.json().get("pagination_info", {}).get("total_count", 0)
+        )
+
+        return total_count, (total_count + page_size - 1) // page_size
+
+    def get_page_ids(page, page_size: int, params: dict[str, Any]) -> List[str]:
+        request_params = params.copy()
+        request_params.update(
+            {
+                "list_params.page": page,
+                "list_params.page_size": page_size,
+            }
+        )
+
+        response = fetch_with_retry(f"{BASE_URL}/product", params=request_params)
+
         return [
             product["id"] for product in response.get("results", []) if "id" in product
         ]
 
-    def fetch_product_details(id: str) -> dict:
+    def get_product(id: str) -> dict:
         url = f"{BASE_URL}/product/{id}"
         params = {
             "with_properties": True,
@@ -402,77 +411,115 @@ def extract_data_callable():
             "with_pre_order": True,
             "with_similar_products": True,
         }
+
         return fetch_with_retry(url, params=params)
 
-    total_pages = get_total_pages()
-    logging.info(f"total_page: {total_pages}")
+    products_count, pages_count = get_total_pages(PAGE_SIZE, product_list_params)
+    logging.info(
+        f"source provided products_count={products_count}, pages_count={pages_count} on page_size={PAGE_SIZE}"
+    )
+
+    if products_count < 1:
+        raise ValueError("source provided no products")
 
     product_ids: List[str] = []
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {
-            executor.submit(fetch_page, page): page for page in range(total_pages)
-        }
-        for f in as_completed(futures):
-            page = futures[f]
-            try:
-                product_ids.extend(f.result())
-                logging.info(f"page {page} is processed")
-            except Exception as e:
-                logging.error(f"error in processing page {page}: {e}")
-                raise
+    # 0 .. (pages_count - 1)
+    for page in range(pages_count):
+        extracted_products: List[dict] = []
 
-    extracted_products: List[dict] = []
+        page_ids = get_page_ids(page, PAGE_SIZE, product_list_params)
+        if not page_ids:
+            raise ValueError(f"no page_ids for page={page}")
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(fetch_product_details, id) for id in product_ids]
-        for f in as_completed(futures):
-            try:
-                result = f.result()
-                if result:
-                    extracted_products.append(result)
-            except Exception as e:
-                logging.error(f"error in processing product details: {e}")
-                raise
+        logging.info(
+            f"page={page}, page_size={PAGE_SIZE}, products_count={len(page_ids)}"
+        )
 
-    if len(product_ids) == 0:
-        raise ValueError("extracted product_ids count=0")
+        product_ids.extend(page_ids)
 
-    put_to_s3(data=extracted_products, s3_key=S3_FILE_NAME_EXTRACTED_DATA)
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(get_product, id) for id in page_ids]
+            for f in as_completed(futures):
+                try:
+                    result = f.result()
+                    if result:
+                        extracted_products.append(result)
+                except Exception as e:
+                    logging.error(f"error in processing product: {e}")
+                    raise
 
-    logging.info(f"extracted products count={len(extracted_products)}")
+        if not extracted_products:
+            raise ValueError(f"no products for page={page}")
+
+        s3_filename = S3_FILE_NAME_EXTRACTED_PRODUCTS_PAGE.format(
+            DAG_ID=DAG_ID,
+            page=page,
+        )
+        put_to_s3(data=extracted_products, s3_key=s3_filename)
+
+    if not product_ids:
+        raise ValueError("no product_ids provided")
+
+    s3_filename = S3_FILE_NAME_EXTRACTED_PRODUCT_IDS.format(
+        DAG_ID=DAG_ID,
+    )
+    put_to_s3(data=product_ids, s3_key=s3_filename)
+
+    context["ti"].xcom_push(key="pages_count", value=pages_count)
 
 
-def transform_data_callable():
-    MAX_WORKERS = 7
+def transform_data_callable(**context):
+    pages_count = context["ti"].xcom_pull(
+        task_ids="extract_data_task", key="pages_count"
+    )
 
-    collected_products: List[dict] = get_from_s3(s3_key=S3_FILE_NAME_EXTRACTED_DATA)
+    MAX_WORKERS = 5
 
-    transformed_products: List[dict] = []
+    for page in range(pages_count):
+        s3_filename = S3_FILE_NAME_EXTRACTED_PRODUCTS_PAGE.format(
+            DAG_ID=DAG_ID,
+            page=page,
+        )
+        collected_products: List[dict] = get_from_s3(s3_key=s3_filename)
+        if not collected_products:
+            raise ValueError(f"no data found in {s3_filename}")
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [
-            executor.submit(encode_document_product, p) for p in collected_products
-        ]
-        for future in as_completed(futures):
-            try:
-                transformed_products.append(future.result())
-            except Exception as e:
-                logging.error(f"Failed to process product: {e}")
-                raise
+        transformed_products: List[dict] = []
 
-    put_to_s3(data=transformed_products, s3_key=S3_FILE_NAME_TRANSFORMED_PRODUCTS)
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(encode_document_product, p): p
+                for p in collected_products
+            }
+            for f in as_completed(futures):
+                try:
+                    result = f.result()
+                    if result:
+                        transformed_products.append(result)
+                except Exception as e:
+                    logging.error(
+                        f"failed to process product={futures[f].get("id", "")}: {e}"
+                    )
+                    raise
 
-    logging.info(f"transformed products count={len(transformed_products)}")
+        del collected_products
+
+        s3_filename = S3_FILE_NAME_TRANSFORMED_PRODUCTS_PAGE.format(
+            DAG_ID=DAG_ID,
+            page=page,
+        )
+        put_to_s3(data=transformed_products, s3_key=s3_filename)
+        del transformed_products
 
 
 def delete_different_data_callable():
-    transformed_products: List[dict] = get_from_s3(
-        s3_key=S3_FILE_NAME_TRANSFORMED_PRODUCTS
+    s3_filename = S3_FILE_NAME_EXTRACTED_PRODUCT_IDS.format(
+        DAG_ID=DAG_ID,
     )
-    transformed_product_ids = {
-        product.get("id") for product in transformed_products if product.get("id")
-    }
+    extracted_ids = get_from_s3(s3_key=s3_filename)
+    if not extracted_ids:
+        raise ValueError(f"no data found in {s3_filename}")
 
     client = elastic_conn(Variable.get("elastic_scheme"))
 
@@ -499,7 +546,7 @@ def delete_different_data_callable():
         if scroll_id:
             client.clear_scroll(scroll_id=scroll_id)
 
-    ids_to_delete = existing_ids - transformed_product_ids
+    ids_to_delete = existing_ids.difference(extracted_ids)
     logging.info(f"product ids to delete count={len(ids_to_delete)}")
 
     delete_actions = [
@@ -524,34 +571,45 @@ def delete_different_data_callable():
             raise
 
 
-def load_data_callable():
-    transformed_products = get_from_s3(s3_key=S3_FILE_NAME_TRANSFORMED_PRODUCTS)
+def load_data_callable(**context):
+    pages_count = context["ti"].xcom_pull(
+        task_ids="extract_data_task", key="pages_count"
+    )
 
     client = elastic_conn(Variable.get("elastic_scheme"))
 
-    actions = [
-        {
-            "_op_type": "update",
-            "_index": INDEX_NAME,
-            "_id": product.get("id"),
-            "doc": product,
-            "doc_as_upsert": True,
-            "retry_on_conflict": 3,
-        }
-        for product in transformed_products
-        if product.get("id")
-    ]
-
-    try:
-        success, errors = helpers.bulk(
-            client, actions, refresh="wait_for", stats_only=False
+    for page in range(pages_count):
+        s3_filename = S3_FILE_NAME_TRANSFORMED_PRODUCTS_PAGE.format(
+            DAG_ID=DAG_ID,
+            page=page,
         )
-        logging.info(f"update success, updated documents count={success}")
-        if errors:
-            logging.error(f"error during bulk update: {errors}")
-    except Exception as bulk_error:
-        logging.error(f"bulk update failed, error: {bulk_error}")
-        raise
+        transformed_products = get_from_s3(s3_key=s3_filename)
+        if not transformed_products:
+            raise ValueError(f"no data found in {s3_filename}")
+
+        actions = [
+            {
+                "_op_type": "update",
+                "_index": INDEX_NAME,
+                "_id": product.get("id"),
+                "doc": product,
+                "doc_as_upsert": True,
+                "retry_on_conflict": 3,
+            }
+            for product in transformed_products
+            if product.get("id")
+        ]
+
+        try:
+            success, errors = helpers.bulk(
+                client, actions, refresh="wait_for", stats_only=False
+            )
+            logging.info(f"update success, updated documents count={success}")
+            if errors:
+                logging.error(f"error during bulk update: {errors}")
+        except Exception as bulk_error:
+            logging.error(f"bulk update failed, error: {bulk_error}")
+            raise
 
 
 with DAG(
@@ -559,7 +617,7 @@ with DAG(
     default_args=default_args,
     description="DAG to upload products from NSI service to Elasticsearch index",
     start_date=datetime(2025, 6, 10),
-    schedule="0 */6 * * *",
+    schedule="0 */7 * * *",
     max_active_runs=1,
     catchup=False,
     tags=["elasticsearch", "nsi", "product"],

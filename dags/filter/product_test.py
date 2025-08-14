@@ -389,7 +389,6 @@ def extract_data_callable(**context):
             f"{BASE_URL}/product",
             params=params,
         )
-        response.raise_for_status()
 
         return [
             product["id"]

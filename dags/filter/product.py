@@ -624,18 +624,18 @@ def clear_xcom_callable(**context):
         key="pages_count",
     )
 
-    dag = context["dag"]
     dag_run = context["dag_run"]
+    current_task_id = context["task_instance"].task_id
+    task_instances = {ti.task_id: ti for ti in dag_run.get_task_instances()}
     failed_tasks = [
-        t.task_id
-        for t in dag.tasks
-        if t.task_id != context["task"].task_id
-        and dag_run.get_task_instance(t.task_id).state == State.FAILED
+        task_id
+        for task_id, ti in task_instances.items()
+        if task_id != current_task_id and ti.state == State.FAILED
     ]
     if failed_tasks:
-        raise ValueError(f"dag completed with failed tasks: {failed_tasks}")
+        raise ValueError(f"DAG completed with failed tasks: {failed_tasks}")
     else:
-        logging.info("dag completed successfully")
+        logging.info("DAG completed successfully")
 
 
 with DAG(

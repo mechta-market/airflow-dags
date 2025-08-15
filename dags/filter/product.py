@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from airflow.sdk import DAG, Variable
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
+from airflow.models import XCom
+from airflow.exceptions import AirflowFailException
 
 from elasticsearch import helpers
 
@@ -612,6 +614,26 @@ def load_data_callable(**context):
             raise
 
 
+def clear_xcom_callable(**context):
+    # clear XCom
+    XCom.clear(
+        dag_id=context["dag"].dag_id
+    )
+
+    # Check errors in previous tasks
+    dag_run = context["dag_run"]
+    failed_tasks = [
+        task.task_id 
+        for task in dag_run.get_task_instances() 
+        if task.state == "failed" 
+    ]
+    
+    if failed_tasks:
+        raise AirflowFailException(f"DAG finished with errors in following tasks: {failed_tasks}")
+    else:
+        logging.info("all done successfully")
+
+
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
@@ -645,4 +667,10 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    (extract_data >> transform_data >> delete_different_data >> load_data)
+    clear_xcom = PythonOperator(
+        task_id="clear_xcom_task",
+        python_callable=clear_xcom_callable,
+        trigger_rule=TriggerRule.ALL_DONE,
+    )
+
+    (extract_data >> transform_data >> delete_different_data >> load_data >> clear_xcom)

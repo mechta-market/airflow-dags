@@ -578,6 +578,13 @@ def load_data_callable(**context):
         task_ids="extract_data_task", key="pages_count"
     )
 
+    XCom.delete(
+        dag_id=DAG_ID,
+        run_id=context["run_id"],
+        task_id="extract_data_task",
+        key="pages_count",
+    )
+
     client = elastic_conn(Variable.get("elastic_scheme"))
 
     for page in range(pages_count):
@@ -616,28 +623,6 @@ def load_data_callable(**context):
             raise
 
 
-def clear_xcom_callable(**context):
-    XCom.delete(
-        dag_id=DAG_ID,
-        run_id=context["run_id"],
-        task_id="extract_data_task",
-        key="pages_count",
-    )
-
-    dag_run = context["dag_run"]
-    current_task_id = context["task_instance"].task_id
-    task_instances = {ti.task_id: ti for ti in dag_run.get_task_instances()}
-    failed_tasks = [
-        task_id
-        for task_id, ti in task_instances.items()
-        if task_id != current_task_id and ti.state == State.FAILED
-    ]
-    if failed_tasks:
-        raise ValueError(f"DAG completed with failed tasks: {failed_tasks}")
-    else:
-        logging.info("DAG completed successfully")
-
-
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
@@ -671,10 +656,4 @@ with DAG(
         trigger_rule=TriggerRule.ALL_SUCCESS,
     )
 
-    clear_xcom = PythonOperator(
-        task_id="clear_xcom_task",
-        python_callable=clear_xcom_callable,
-        trigger_rule=TriggerRule.ALL_DONE,
-    )
-
-    (extract_data >> transform_data >> delete_different_data >> load_data >> clear_xcom)
+    (extract_data >> transform_data >> delete_different_data >> load_data)

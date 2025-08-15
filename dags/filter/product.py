@@ -8,7 +8,6 @@ from airflow.sdk import DAG, Variable
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.utils.trigger_rule import TriggerRule
 from airflow.models.xcom import XCom
-from airflow.utils.state import State
 
 from elasticsearch import helpers
 

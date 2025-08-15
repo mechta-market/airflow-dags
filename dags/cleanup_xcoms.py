@@ -33,7 +33,7 @@ with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
     start_date=datetime(2025, 6, 10),
-    schedule_interval="0 * * * *",
+    schedule="0 * * * *",
     max_active_runs=1,
     catchup=False,
     tags=["maintenance", "xcom", "cleanup"],

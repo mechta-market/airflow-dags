@@ -18,8 +18,6 @@ def delete_old_xcoms():
 
     deleted_count = XCom.delete(
         dag_id="product",
-        start_date=datetime(2000, 1, 1),  # гарантируем, что захватим всё
-        end_date=cutoff_time,
     )
     logging.info(f"deleted {deleted_count} XCom rows older than {cutoff_time}")
 

@@ -1,9 +1,9 @@
 import pendulum
 import logging
+from datetime import datetime
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
 from airflow.models.xcom import XCom
 from airflow.utils.session import provide_session
 
@@ -32,7 +32,7 @@ def delete_old_xcoms(session: Session = None):
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    start_date=days_ago(1),
+    start_date=datetime(2025, 6, 10),
     schedule_interval="0 * * * *",
     max_active_runs=1,
     catchup=False,

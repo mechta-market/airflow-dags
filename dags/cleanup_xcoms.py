@@ -5,9 +5,6 @@ from datetime import datetime
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.models.xcom import XCom
-from airflow.utils.session import provide_session
-
-from sqlalchemy.orm import Session
 
 DAG_ID = "cleanup_old_xcoms_daily"
 
@@ -16,17 +13,14 @@ default_args = {
 }
 
 
-@provide_session
-def delete_old_xcoms(session: Session = None):
-    cutoff_date = pendulum.now("UTC").subtract(hours=1)
-    logging.info(f"cutoff_date {cutoff_date}")
-    deleted = (
-        session.query(XCom)
-        .filter(XCom.execution_date < cutoff_date)
-        .delete(synchronize_session=False)
+def delete_old_xcoms():
+    cutoff_time = pendulum.now("UTC").subtract(hours=1)
+
+    deleted_count = XCom.clear(
+        start_date=datetime(2000, 1, 1),  # гарантируем, что захватим всё
+        end_date=cutoff_time,
     )
-    session.commit()
-    logging.info(f"deleted {deleted} XCom rows older than {cutoff_date}")
+    logging.info(f"deleted {deleted_count} XCom rows older than {cutoff_time}")
 
 
 with DAG(

@@ -75,6 +75,7 @@ class DocumentProduct:
         self.similar_products = self._parse_similar_products(
             p.get("similar_products", [])
         )
+        self.product_parts = self._parse_product_parts(p.get("product_parts", []))
 
     def _parse_i18n(self, field_i18n) -> dict:
         return {lang: field_i18n.get(lang, "") for lang in TARGET_LANGUAGES}
@@ -347,6 +348,25 @@ class DocumentProduct:
             )
         return result
 
+    def _parse_product_parts(self, product_parts) -> List[Dict[str, Any]]:
+        result = []
+
+        if not product_parts:
+            return result
+
+        for product_part in product_parts:
+            count = product_part.get("count", 0)
+
+            p = product_part.get("product", {})
+            product = {
+                "id": p.get("id", ""),
+                "name_i18n": self._parse_i18n(p.get("name_i18n") or {}),
+            }
+
+            result.append({"product": product, "count": count})
+
+        return result
+
 
 def encode_document_product(p: dict) -> dict:
     dp = DocumentProduct(p)
@@ -411,6 +431,7 @@ def extract_data_callable(**context):
             "with_video": True,
             "with_pre_order": True,
             "with_similar_products": True,
+            "with_product_parts": True,
         }
 
         return fetch_with_retry(url, params=params)

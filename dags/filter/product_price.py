@@ -209,7 +209,14 @@ def transform_base_price_callable():
             if response.json().get("code") == ERR_NO_ROWS:
                 return product_id, []
 
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            logging.error(
+                f"request fail, product_id={product_id}, status_code={response.status_code}, body={response.json()}"
+            )
+            raise
+
         base_price = response.json()
 
         # 2
@@ -307,7 +314,13 @@ def transform_final_price_callable():
             if response.json().get("code") == ERR_NO_ROWS:
                 return product_id, []
 
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            logging.error(
+                f"request fail, product_id={product_id}, status_code={response.status_code}, body={response.json()}"
+            )
+            raise
         final_price = response.json()
 
         # 2
@@ -319,7 +332,13 @@ def transform_final_price_callable():
             },
             timeout=80,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError:
+            logging.error(
+                f"request fail, product_id={product_id}, status_code={response.status_code}, body={response.json()}"
+            )
+            raise
         data = response.json()
         spec_final_prices = data.get("results", [])
 

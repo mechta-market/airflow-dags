@@ -16,8 +16,13 @@ S3_CONN_ID = "s3"
 def request_to_1c(host: str, dic_name: str) -> dict:
     url = f"{host}/send/by_db_name/AstOffice/getbaseinfo/{dic_name}"
 
-    resp = requests.post(url, timeout=30)
-    resp.raise_for_status()
+    try:
+        resp = requests.post(url, timeout=30)
+        resp.raise_for_status()
+    except: 
+        logging.error(f"request_to_1c error, response={resp.json()}")
+        raise
+
     return resp.json()
 
 

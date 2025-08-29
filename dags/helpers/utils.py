@@ -19,9 +19,9 @@ def request_to_1c(host: str, dic_name: str) -> dict:
     try:
         resp = requests.post(url, timeout=30)
         resp.raise_for_status()
-    except: 
-        logging.error(f"request_to_1c error, response={resp.json()}")
-        raise
+    except Exception as e: 
+        logging.error(f"request_to_1c error, response={resp.text[:2000]}")
+        raise e
 
     return resp.json()
 

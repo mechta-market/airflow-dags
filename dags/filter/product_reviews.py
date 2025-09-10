@@ -165,7 +165,7 @@ def fetch_data_callable():
 
     with gzip.open(local_path, mode="rt", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        for row in enumerate(reader):
+        for row in reader:
             source_data.append(
                 {
                     "product_id": row.get("EXTERNAL ID"),

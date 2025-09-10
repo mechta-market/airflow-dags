@@ -44,6 +44,7 @@ def fetch_data_callable():
     baseHook = BaseHook.get_connection("aplaut")
     token = baseHook.extra_dejson.get("token")
     headers = {"Authorization": f"Bearer {token}"}
+    logging.info(token, headers)
 
     conn = HttpHook(http_conn_id="aplaut")
     session = conn.get_conn()

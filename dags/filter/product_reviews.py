@@ -2,6 +2,8 @@ import logging
 import requests
 import gzip
 import csv
+import tempfile
+import os
 from typing import Any
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -70,7 +72,10 @@ def fetch_data_callable():
 
     # get file
 
-    local_filename = f"{DAG_ID}/source_product_reviews.csv.gz"
+    local_filename = "source_product_reviews.csv.gz"
+
+    local_dir = tempfile.gettempdir()
+    local_path = os.path.join(local_dir, local_filename)
 
     with requests.get(file_url, stream=True) as r:
         r.raise_for_status()

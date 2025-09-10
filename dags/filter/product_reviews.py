@@ -41,37 +41,21 @@ def fetch_data_callable():
     # if status=completed, get the file.
     # save the file to s3.
 
-    baseHook = BaseHook.get_connection("aplaut")
-    token = baseHook.extra_dejson.get("token")
+    aplaut_conn = HttpHook(http_conn_id="aplaut")
+    token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token")
+    logging.info(1, token)
     headers = {"Authorization": f"Bearer {token}"}
-    logging.info(token, headers)
+    logging.info(2, headers)
 
-    conn = HttpHook(http_conn_id="aplaut")
-    session = conn.get_conn()
-    base = conn.base_url.rstrip("/")
-
-    url = f"{base}/v4/export_tasks/68a87b53d3343f001c66b534"
     try:
-        response = session.request("GET", url, headers=headers)
+        response = aplaut_conn.run(
+            method="GET",
+            endpoint="/v4/export_tasks/68a87b53d3343f001c66b534", 
+            headers=headers)
         logging.info(f"success: {response}")
     except Exception:  
         logging.error(f"fail: {Exception}")
         raise
-    
-
-    # aplaut_conn = HttpHook(http_conn_id="aplaut", method="GET")
-    # token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token")
-    # headers = {"Authorization": f"Bearer {token}"}
-
-    # try:
-    #     response = aplaut_conn.run(
-    #         extra_options={"method": "GET"},
-    #         endpoint="/v4/export_tasks/68a87b53d3343f001c66b534", 
-    #         headers=headers)
-    #     logging.info(f"success: {response}")
-    # except Exception:  
-    #     logging.error(f"fail: {Exception}")
-    #     raise
 
     logging.info("done")
 

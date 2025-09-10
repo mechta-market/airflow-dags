@@ -41,8 +41,17 @@ def fetch_data_callable():
     # if status=completed, get the file.
     # save the file to s3.
 
+    baseHook = BaseHook.get_connection("aplaut")
+    baseHookExtra = baseHook.extra_dejson   # автоматически парсит JSON
+    
+    baseHookExtraToken = baseHookExtra.get("token")
+    if not baseHookExtraToken:
+        raise ValueError("Token not found in Connection extra fields")
+
     aplaut_conn = HttpHook(http_conn_id="aplaut")
-    token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token")
+    if not aplaut_conn.get_connection("aplaut").extra_dejson:
+        raise ValueError("!!!!")
+    token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token", "")
     logging.info(f"1, {token}")
     headers = {"Authorization": f"Bearer {token}"}
     logging.info(f"2, {headers}")

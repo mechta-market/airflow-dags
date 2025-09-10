@@ -78,6 +78,20 @@ def request_aplaut(
     return response
 
 
+def parse_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def fetch_data_callable():
     ## * Create task
 
@@ -169,8 +183,8 @@ def fetch_data_callable():
             source_data.append(
                 {
                     "product_id": row.get("EXTERNAL ID"),
-                    "reviews_count": row.get("REVIEWS COUNT"),
-                    "rating": row.get("RATING"),
+                    "reviews_count": row.get("REVIEWS COUNT", 0),
+                    "rating": row.get("RATING", 0),
                 }
             )
 

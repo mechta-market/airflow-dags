@@ -58,7 +58,7 @@ def fetch_data_callable():
             endpoint="/v4/export_tasks/68a87b53d3343f001c66b534",
             headers=headers,
         )
-        file_url = response.json.get("data").get("attributes").get("archive_url")
+        file_url = response.json().get("data").get("attributes").get("archive_url")
         if not file_url:
             raise ValueError("file_url is empty")
 

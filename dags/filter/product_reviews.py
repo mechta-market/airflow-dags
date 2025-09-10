@@ -174,6 +174,8 @@ def fetch_data_callable():
                 }
             )
 
+    logging.info(f"records count={len(source_data)}")
+
     put_to_s3(data=source_data, s3_key=S3_FILE_NAME)
 
 
@@ -225,8 +227,12 @@ def upsert_to_es_callable():
             "retry_on_conflict": 3,
         }
         for record in source_data
-        if record.get("id") and record.get("id") in existing_ids
+        if record.get("product_id") and record.get("product_id") in existing_ids
     ]
+
+    logging.info(f"source_data count={len(source_data)}")
+    logging.info(f"existings_ids count={len(existing_ids)}")
+    logging.info(f"actions count={len(actions)}")
 
     try:
         success, errors = helpers.bulk(

@@ -40,7 +40,7 @@ def fetch_data_callable():
     # if status=completed, get the file.
     # save the file to s3.
 
-    aplaut_conn = HttpHook(http_conn_id="aplaut")
+    aplaut_conn = HttpHook(http_conn_id="aplaut", method="GET")
     token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token")
     headers = {"Authorization": f"Bearer {token}"}
 

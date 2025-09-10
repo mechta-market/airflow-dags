@@ -20,7 +20,7 @@ from helpers.utils import elastic_conn, put_to_s3, get_from_s3
 
 # ? "export_format": "[.id?, .reviews_count?, .rating?]"
 
-# ? ежедневный лимит на длительность всех успешно завершенных экспортов = 60 минут. 
+# ? ежедневный лимит на длительность всех успешно завершенных экспортов = 60 минут.
 # ? далее очередь с низким приоритетом и сброс в начале следующего дня.
 
 # ? ограничение в коль-во строк / единиц контента = 500 000 строк за один экспорт.
@@ -42,13 +42,13 @@ def fetch_data_callable():
     # save the file to s3.
 
     baseHook = BaseHook.get_connection("aplaut")
-    baseHookExtra = baseHook.extra_dejson   # автоматически парсит JSON
-    
+    baseHookExtra = baseHook.extra_dejson  # автоматически парсит JSON
+
     baseHookExtraToken = baseHookExtra.get("token")
     if not baseHookExtraToken:
         raise ValueError("Token not found in Connection extra fields")
 
-    aplaut_conn = HttpHook(http_conn_id="aplaut")
+    aplaut_conn = HttpHook(http_conn_id="aplaut", method="GET")
     if not aplaut_conn.get_connection("aplaut").extra_dejson:
         raise ValueError("!!!!")
     token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token", "")
@@ -58,11 +58,11 @@ def fetch_data_callable():
 
     try:
         response = aplaut_conn.run(
-            method="GET",
-            endpoint="/v4/export_tasks/68a87b53d3343f001c66b534", 
-            headers=headers)
+            endpoint="/v4/export_tasks/68a87b53d3343f001c66b534",
+            headers=headers,
+        )
         logging.info(f"success: {response}")
-    except Exception:  
+    except Exception:
         logging.error(f"fail: {Exception}")
         raise
 
@@ -110,4 +110,4 @@ with DAG(
     #     python_callable=calculate_category_avg_reviews_callable,
     # )
 
-    fetch_data # >> delete_previous_data >> upsert_to_es
+    fetch_data  # >> delete_previous_data >> upsert_to_es

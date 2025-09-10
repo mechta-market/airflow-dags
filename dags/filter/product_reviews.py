@@ -183,8 +183,8 @@ def fetch_data_callable():
             source_data.append(
                 {
                     "product_id": row.get("EXTERNAL ID"),
-                    "reviews_count": row.get("REVIEWS COUNT", 0),
-                    "rating": row.get("RATING", 0),
+                    "reviews_count": parse_int(row.get("REVIEWS COUNT", 0)),
+                    "rating": parse_float(row.get("RATING", 0)),
                 }
             )
 

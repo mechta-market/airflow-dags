@@ -36,7 +36,7 @@ default_args = {
     "depends_on_past": False,
 }
 
-INDEX_NAME = "product_test"
+INDEX_NAME = "product_v2"
 
 S3_FILE_NAME = f"{DAG_ID}/product_reviews.json"
 

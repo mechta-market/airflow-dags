@@ -43,9 +43,9 @@ def fetch_data_callable():
 
     aplaut_conn = HttpHook(http_conn_id="aplaut")
     token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token")
-    logging.info(1, token)
+    logging.info(f"1, {token}")
     headers = {"Authorization": f"Bearer {token}"}
-    logging.info(2, headers)
+    logging.info(f"2, {headers}")
 
     try:
         response = aplaut_conn.run(

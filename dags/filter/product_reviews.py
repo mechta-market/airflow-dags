@@ -1,5 +1,7 @@
 import logging
 import requests
+import gzip
+import csv
 from typing import Any
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -41,6 +43,7 @@ def fetch_data_callable():
     # if status=completed, get the file.
     # save the file to s3.
 
+    # Get file_url
     base_conn = BaseHook.get_connection("aplaut")
     token = base_conn.extra_dejson.get("token")
     if not token:
@@ -49,16 +52,39 @@ def fetch_data_callable():
     aplaut_conn = HttpHook(http_conn_id="aplaut", method="GET")
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
+    file_url = ""
     try:
         response = aplaut_conn.run(
             endpoint="/v4/export_tasks/68a87b53d3343f001c66b534",
             headers=headers,
         )
-        logging.info(f"success: {response.json()}")
+        file_url = response.json.get("data").get("attributes").get("archive_url")
+        if not file_url:
+            raise ValueError("file_url is empty")
+
+        logging.info(f"file_url={file_url}")
     except Exception:
         logging.error(f"fail: {Exception}")
         logging.info(f"response: {response.text}")
         raise
+
+    # get file
+
+    local_filename = f"{DAG_ID}/source_product_reviews.csv.gz"
+
+    with requests.get(file_url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_filename, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+    logging.info(f"stored={local_filename}")
+    
+    with gzip.open(local_filename, mode="rt", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        for i, row in enumerate(reader):
+            print(row)
+            if i == 2:
+                break
 
     logging.info("done")
 

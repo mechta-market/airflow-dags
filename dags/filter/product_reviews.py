@@ -8,6 +8,7 @@ from airflow.sdk import DAG, Variable
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 from airflow.providers.http.hooks.http import HttpHook
+from airflow.hooks.base import BaseHook
 
 from elasticsearch import helpers
 from elasticsearch.helpers import BulkIndexError
@@ -40,19 +41,36 @@ def fetch_data_callable():
     # if status=completed, get the file.
     # save the file to s3.
 
-    aplaut_conn = HttpHook(http_conn_id="aplaut", method="GET")
-    token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token")
+    baseHook = BaseHook.get_connection("aplaut")
+    token = conn.extra_dejson.get("token") or conn.password
     headers = {"Authorization": f"Bearer {token}"}
 
+    conn = HttpHook(http_conn_id="aplaut")
+    session = conn.get_conn()
+    base = conn.base_url.rstrip("/")
+
+    url = f"{base}/v4/export_tasks/68a87b53d3343f001c66b534"
     try:
-        response = aplaut_conn.run(
-            extra_options={"method": "GET"},
-            endpoint="/v4/export_tasks/68a87b53d3343f001c66b534", 
-            headers=headers)
+        response = session.request("GET", url, headers=headers)
         logging.info(f"success: {response}")
     except Exception:  
         logging.error(f"fail: {Exception}")
         raise
+    
+
+    # aplaut_conn = HttpHook(http_conn_id="aplaut", method="GET")
+    # token = aplaut_conn.get_connection("aplaut").extra_dejson.get("token")
+    # headers = {"Authorization": f"Bearer {token}"}
+
+    # try:
+    #     response = aplaut_conn.run(
+    #         extra_options={"method": "GET"},
+    #         endpoint="/v4/export_tasks/68a87b53d3343f001c66b534", 
+    #         headers=headers)
+    #     logging.info(f"success: {response}")
+    # except Exception:  
+    #     logging.error(f"fail: {Exception}")
+    #     raise
 
     logging.info("done")
 

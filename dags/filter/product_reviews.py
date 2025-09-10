@@ -49,10 +49,10 @@ def fetch_data_callable():
             extra_options={"method": "GET"},
             endpoint="/v4/export_tasks/68a87b53d3343f001c66b534", 
             headers=headers)
-        response.raise_for_status()
         logging.info(f"success: {response}")
     except Exception:  
-        logging.error(f"fail: {response}")
+        logging.error(f"fail: {Exception}")
+        raise
 
     logging.info("done")
 

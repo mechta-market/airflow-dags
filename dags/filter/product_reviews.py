@@ -42,7 +42,7 @@ def fetch_data_callable():
     # save the file to s3.
 
     baseHook = BaseHook.get_connection("aplaut")
-    token = conn.extra_dejson.get("token") or conn.password
+    token = baseHook.extra_dejson.get("token")
     headers = {"Authorization": f"Bearer {token}"}
 
     conn = HttpHook(http_conn_id="aplaut")

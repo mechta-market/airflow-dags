@@ -43,6 +43,8 @@ S3_FILE_NAME = f"{DAG_ID}/product_reviews.json"
 # errors
 ErrTokenNotFound = ValueError("connection: token not found")
 ErrTaskIdNotFound = ValueError("task_id not found")
+ErrUndefinedTaskState = ValueError("undefined task state")
+ErrFileUrlEmpty = ValueError("file_url empty")
 
 
 def request_aplaut(
@@ -96,6 +98,7 @@ def fetch_data_callable():
     ## * Create task
 
     # task_id = ""
+
     # try:
     #     response = request_aplaut(
     #         method="POST",
@@ -121,7 +124,7 @@ def fetch_data_callable():
 
     ## * Track task state and get file_url
 
-    task_id = "68a87b53d3343f001c66b534"
+    task_id = "68c15ea9e13c7500169afba1"
 
     state = ""
     file_url = ""
@@ -143,23 +146,27 @@ def fetch_data_callable():
         state = attributes.get("state")
 
         if not state:
-            raise ValueError("test")
+            raise ErrUndefinedTaskState
 
-        if state == "":  # in progress?
+        if state == "processing":
+            time.sleep(120)
             continue
 
         if state == "completed":
             file_url = attributes.get("archive_url")
 
-            if file_url == "":  # if empty, debounce on one more try with wait time.
-                if try_count < 1:
+            if file_url:  
+                break # success
+            else:
+                if try_count < 1: # debounce on one more try with wait time.
                     try_count = try_count + 1
-                    time.sleep(5)
+                    time.sleep(30)
                     continue
                 else:
-                    raise ValueError("file_url is empty")
+                    raise ErrFileUrlEmpty
 
-        break
+        logging.error(f"undefined state={state}") # any other state
+        raise ErrUndefinedTaskState
 
     ## * Get file
 

@@ -54,7 +54,7 @@ def fetch_data_callable():
             endpoint="/v4/export_tasks/68a87b53d3343f001c66b534",
             headers=headers,
         )
-        logging.info(f"success: {response}")
+        logging.info(f"success: {response.json()}")
     except Exception:
         logging.error(f"fail: {Exception}")
         logging.info(f"response: {response.text}")

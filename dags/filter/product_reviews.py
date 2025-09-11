@@ -92,10 +92,10 @@ class ElasticsearchClient:
         request_body = {
             "_source": False,
             "query": {"match_all": {}},
-            "sort": [{"_id": "asc"}],
+            "sort": [{"id": "asc"}],
         }
 
-        scroll_id = Any
+        scroll_id = None
 
         try:
             response = self.client.search(

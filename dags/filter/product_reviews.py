@@ -54,7 +54,7 @@ class AplautClient:
             raise ErrTokenNotFound
         return token
 
-    def request(self, method: str, endpoint: str, data: Dict = None) -> Any:
+    def request(self, method: str, endpoint: str, body: Dict = None) -> Any:
         headers = {
             "Authorization": f"Bearer {self.__token}",
             "Content-Type": "application/json",
@@ -66,7 +66,7 @@ class AplautClient:
             response = http_hook.run(
                 endpoint=endpoint,
                 headers=headers,
-                data=data,
+                data=body,
                 extra_options={"timeout": 60},
             )
             response.raise_for_status()

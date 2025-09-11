@@ -54,7 +54,7 @@ class AplautClient:
             raise ErrTokenNotFound
         return token
 
-    def request(self, method: str, endpoint: str, data: Dict = None) -> Any:
+    def request(self, method: str, endpoint: str, body: Dict = None) -> Any:
         http_hook = HttpHook(http_conn_id=self.__conn_id, method=method)
 
         headers = {
@@ -68,7 +68,7 @@ class AplautClient:
             response = http_hook.run(
                 endpoint=endpoint,
                 headers=headers,
-                data=data,
+                json=body,
                 # extra_options={"timeout": 60},
             )
         except Exception as e:
@@ -178,19 +178,21 @@ def fetch_data_callable():
 
     task_id = ""
     try:
+        body = {
+            "data": {
+                "type": "export_tasks",
+                "attributes": {
+                    "records_type": "products",
+                    "search_options": {},
+                    "format": "csv",
+                },
+            }
+        }
+
         response = aplaut_client.request(
             method="POST",
             endpoint="/v4/export_tasks",
-            data={
-                "data": {
-                    "type": "export_tasks",
-                    "attributes": {
-                        "records_type": "products",
-                        "search_options": {},
-                        "format": "csv",
-                    },
-                }
-            },
+            data=body,
         )
         task_id = response.json().get("data", {}).get("id")
 

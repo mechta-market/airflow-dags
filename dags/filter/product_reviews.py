@@ -54,7 +54,7 @@ class AplautClient:
             raise ErrTokenNotFound
         return token
 
-    def request(self, method: str, endpoint: str, body: Dict = None) -> Any:
+    def request(self, method: str, endpoint: str, data: Dict = None) -> Any:
         headers = {
             "Authorization": f"Bearer {self.__token}",
             "Content-Type": "application/json",
@@ -66,16 +66,16 @@ class AplautClient:
             response = http_hook.run(
                 endpoint=endpoint,
                 headers=headers,
-                data=body,
+                data=data,
                 extra_options={"timeout": 60},
             )
             response.raise_for_status()
             return response
 
         except Exception as e:
-            logging.error(
-                f"aplaut api request failed: response={response.text}, exception={e}"
-            )
+            logging.error(f"aplaut api request failed: exception={e}")
+            if response:
+                logging.error(f"response={response.text}")
             raise
 
 
@@ -180,15 +180,15 @@ def fetch_data_callable():
         response = aplaut_client.request(
             method="POST",
             endpoint="/v4/export_tasks",
-            body={
+            data={
                 "data": {
                     "type": "export_tasks",
                     "attributes": {
                         "records_type": "products",
-                        "search_options": {},  # format request
+                        "search_options": {},
                         "format": "csv",
                     },
-                },
+                }
             },
         )
         task_id = response.json().get("data", {}).get("id")
@@ -227,7 +227,7 @@ def fetch_data_callable():
 
         logging.info(f"tracking state: retry_count={retry_count} state={state}")
 
-        if state == "processing":
+        if state in ("waiting", "processing", "suspended"):
             time.sleep(POLLING_INTERVAL)
             retry_count += 1
             continue

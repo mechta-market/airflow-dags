@@ -192,7 +192,7 @@ def fetch_data_callable():
         response = aplaut_client.request(
             method="POST",
             endpoint="/v4/export_tasks",
-            data=body,
+            body=body,
         )
         task_id = response.json().get("data", {}).get("id")
 

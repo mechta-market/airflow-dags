@@ -189,7 +189,7 @@ def fetch_data_callable():
         }
     }
 
-    last_updated_at = Variable.get(VARIABLE_APLAUT_LAST_UPDATED_AT_KEY)
+    last_updated_at = Variable.get(VARIABLE_APLAUT_LAST_UPDATED_AT_KEY, None)
     if last_updated_at:
         body["data"]["attributes"]["search_options"]["filter"] = {
             "updated_at": {"gt": last_updated_at}

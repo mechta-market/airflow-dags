@@ -175,34 +175,32 @@ def fetch_data_callable():
 
     ## * Create task
 
-    # task_id = ""
-    # try:
-    #     response = aplaut_client.request(
-    #         method="POST",
-    #         endpoint="/v4/export_tasks",
-    #         body={
-    #             "data": {
-    #                 "type": "export_tasks",
-    #                 "attributes": {
-    #                     "records_type": "products",
-    #                     "search_options": {},  # format request
-    #                     "format": "csv",
-    #                 },
-    #             },
-    #         },
-    #     )
-    #     task_id = response.json().get("data", {}).get("id")
+    task_id = ""
+    try:
+        response = aplaut_client.request(
+            method="POST",
+            endpoint="/v4/export_tasks",
+            body={
+                "data": {
+                    "type": "export_tasks",
+                    "attributes": {
+                        "records_type": "products",
+                        "search_options": {},  # format request
+                        "format": "csv",
+                    },
+                },
+            },
+        )
+        task_id = response.json().get("data", {}).get("id")
 
-    # except Exception as e:
-    #     logging.error(f"failed to create export task: {e}")
-    #     raise
+    except Exception as e:
+        logging.error(f"failed to create export task: {e}")
+        raise
 
-    # if not task_id:
-    #     raise ErrTaskIdNotFound
+    if not task_id:
+        raise ErrTaskIdNotFound
 
     ## * Track task state and get file_url
-
-    task_id = "68c15ea9e13c7500169afba1"
 
     logging.info(f"fetched task_id={task_id}")
 
@@ -256,7 +254,7 @@ def fetch_data_callable():
         logging.error(f"source service didn't provide file_url")
         raise ErrServiceNA
 
-    ## * Download file
+    ## * File work
 
     local_filename = "aplaud_product_reviews.csv.gz"
     local_dir = tempfile.gettempdir()

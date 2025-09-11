@@ -6,7 +6,7 @@ import requests
 import tempfile
 import time
 from typing import Any, Dict, List, Set
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from airflow.hooks.base import BaseHook
 from airflow.providers.http.hooks.http import HttpHook
@@ -30,6 +30,7 @@ default_args = {
 
 INDEX_NAME = "product_test"
 S3_FILE_NAME = f"{DAG_ID}/product_reviews.json"
+VARIABLE_APLAUT_LAST_UPDATED_AT_KEY = "aplaut_last_updated_at"
 
 # Errors
 
@@ -176,19 +177,27 @@ def fetch_data_callable():
 
     ## * Create task
 
+    body = {
+        "data": {
+            "type": "export_tasks",
+            "attributes": {
+                "records_type": "products",
+                "search_options": {},
+                "format": "csv",
+                "export_format": "[.external_id?, .reviews_count?, .rating?]",
+            },
+        }
+    }
+
+    last_updated_at = Variable.get(VARIABLE_APLAUT_LAST_UPDATED_AT_KEY)
+    if last_updated_at:
+        body["data"]["attributes"]["search_options"]["filter"] = {
+            "updated_at": {"gt": last_updated_at}
+        }
+        logging.info(f"last_updated_at={last_updated_at}, applying the filter")
+
     task_id = ""
     try:
-        body = {
-            "data": {
-                "type": "export_tasks",
-                "attributes": {
-                    "records_type": "products",
-                    "search_options": {},
-                    "format": "csv",
-                },
-            }
-        }
-
         response = aplaut_client.request(
             method="POST",
             endpoint="/v4/export_tasks",
@@ -300,6 +309,12 @@ def upsert_to_es_callable():
         es_client.bulk_update_records(actions)
     else:
         logging.info("no records to update")
+
+    tz = timezone(timedelta(hours=5))
+    now = datetime.now(tz)
+    formatted_now = now.isoformat()
+
+    Variable.set(VARIABLE_APLAUT_LAST_UPDATED_AT_KEY, formatted_now)
 
 
 with DAG(

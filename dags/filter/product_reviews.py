@@ -87,7 +87,7 @@ class ElasticsearchClient:
         scheme = Variable.get("elastic_scheme")
         return elastic_conn(scheme)
 
-    def get_existing_product_ids(self, index: str, batch_size: int = 10000) -> Set[str]:
+    def get_existing_product_ids(self, index: str, batch_size: int = 5000) -> Set[str]:
         existing_ids = set()
         request_body = {
             "_source": False,

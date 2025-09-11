@@ -1,34 +1,24 @@
-import logging
-import requests
-import gzip
 import csv
-import tempfile
+import gzip
+import logging
 import os
+import requests
+import tempfile
 import time
-from typing import Any
+from typing import Any, Dict, List, Set
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from airflow.sdk import DAG, Variable
-from airflow.providers.standard.operators.python import PythonOperator
-from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
-from airflow.providers.http.hooks.http import HttpHook
 from airflow.hooks.base import BaseHook
+from airflow.providers.http.hooks.http import HttpHook
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.sdk import DAG, Variable
 
 from elasticsearch import helpers
-from elasticsearch.helpers import BulkIndexError
 
-from helpers.utils import elastic_conn, put_to_s3, get_from_s3
+from helpers.utils import elastic_conn, put_to_s3, get_from_s3, parse_int, parse_float
 
-# ? выгружать только те данные, у которых были изменения.
-# ? "search_options": {"filter": {"updated_at": {"gt": "YYYY-MM-DDThh:mm:ss+05:00"}}}
 
-# ? "export_format": "[.id?, .reviews_count?, .rating?]"
-
-# ? ежедневный лимит на длительность всех успешно завершенных экспортов = 60 минут.
-# ? далее очередь с низким приоритетом и сброс в начале следующего дня.
-
-# ? ограничение в коль-во строк / единиц контента = 500 000 строк за один экспорт.
+# DAG parameters
 
 DAG_ID = "product_reviews"
 default_args = {
@@ -36,71 +26,157 @@ default_args = {
     "depends_on_past": False,
 }
 
-INDEX_NAME = "product_v2"
+# Constants
 
+INDEX_NAME = "product_test"
 S3_FILE_NAME = f"{DAG_ID}/product_reviews.json"
 
-# errors
+# Errors
+
 ErrTokenNotFound = ValueError("connection: token not found")
 ErrTaskIdNotFound = ValueError("task_id not found")
 ErrUndefinedTaskState = ValueError("undefined task state")
 ErrFileUrlEmpty = ValueError("file_url empty")
+ErrServiceNA = ValueError("service not available")
+
+# Functions
 
 
-def request_aplaut(
-    method="",
-    endpoint="",
-    headers={},
-    body={},
-) -> Any:
-    # Authorization part:
-    base_conn = BaseHook.get_connection("aplaut")
-    token = base_conn.extra_dejson.get("token")
-    if not token:
-        raise ErrTokenNotFound
+class AplautClient:
+    def __init__(self):
+        self.__conn_id = "aplaut"
+        self.__token = self.__get_token()
 
-    aplaut_conn = HttpHook(http_conn_id="aplaut", method=method)
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+    def __get_token(self) -> str:
+        base_conn = BaseHook.get_connection(self.__conn_id)
+        token = base_conn.extra_dejson.get("token")
+        if not token:
+            raise ErrTokenNotFound
+        return token
 
-    response = {}
+    def request(self, method: str, endpoint: str, data: Dict = None) -> Any:
+        headers = {
+            "Authorization": f"Bearer {self.__token}",
+            "Content-Type": "application/json",
+        }
 
+        http_hook = HttpHook(http_conn_id=self.__conn_id, method=method)
+
+        try:
+            response = http_hook.run(
+                endpoint=endpoint,
+                headers=headers,
+                data=data,
+                extra_options={"timeout": 60},
+            )
+            response.raise_for_status()
+            return response
+
+        except Exception as e:
+            logging.error(
+                f"aplaut api request failed: response={response.text}, exception={e}"
+            )
+            raise
+
+
+class ElasticsearchClient:
+    def __init__(self):
+        self.client = self.__get_elastic_client()
+
+    def __get_elastic_client(self):
+        scheme = Variable.get("elastic_scheme")
+        return elastic_conn(scheme)
+
+    def get_existing_product_ids(self, index: str, batch_size: int = 10000) -> Set[str]:
+        existing_ids = set()
+        request_body = {
+            "_source": False,
+            "query": {"match_all": {}},
+            "sort": [{"_id": "asc"}],
+        }
+
+        scroll_id = Any
+
+        try:
+            response = self.client.search(
+                index=index, body=request_body, size=batch_size, scroll="2m"
+            )
+            scroll_id = response["_scroll_id"]
+            existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
+            while len(response["hits"]["hits"]) > 0:
+                response = self.client.scroll(scroll_id=scroll_id, scroll="2m")
+                existing_ids.update(hit["_id"] for hit in response["hits"]["hits"])
+        except Exception as e:
+            logging.error(f"failed to fetch ids from Elasticsearch: {e}")
+            raise
+        finally:
+            if scroll_id:
+                self.client.clear_scroll(scroll_id=scroll_id)
+
+    def bulk_update_records(self, actions: List[Dict]):
+        try:
+            success, errors = helpers.bulk(
+                self.client, actions, refresh="wait_for", stats_only=False
+            )
+            logging.info(f"update success, updated documents count={success}")
+            if errors:
+                logging.error(f"error during bulk update: {errors}")
+        except Exception as bulk_error:
+            logging.error(f"bulk update failed, error: {bulk_error}")
+            raise
+
+
+def download_file(url: str, local_path: str) -> None:
     try:
-        response = aplaut_conn.run(
-            endpoint=endpoint,
-            headers=headers,
-            data=body,
-        )
-    except Exception:
-        logging.error(f"response={response.text}, exception={Exception}")
+        with requests.get(url, stream=True, timeout=300) as response:
+            response.raise_for_status()
+            with open(local_path, "wb") as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        file.write(chunk)
+        logging.info(f"File downloaded successfully: {local_path}")
+    except Exception as e:
+        logging.error(f"File download failed: {e}")
         raise
 
-    return response
 
+def process_csv_file(file_path: str) -> List[Dict]:
+    result = []
 
-def parse_int(value):
     try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+        with gzip.open(file_path, mode="rt", encoding="utf-8") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                result.append(
+                    {
+                        "product_id": row.get("EXTERNAL ID", "").strip(),
+                        "reviews_count": parse_int(row.get("REVIEWS COUNT", 0)),
+                        "rating": parse_float(row.get("RATING", 0)),
+                    }
+                )
 
+        logging.info(f"processed records count={len(result)}")
+        return result
 
-def parse_float(value):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    except Exception as e:
+        logging.error(f"CSV processing failed: {e}")
+        raise
 
 
 def fetch_data_callable():
+
+    MAX_RETRIES = 15
+    POLLING_INTERVAL = 120
+    MAX_DEBOUNCE = 1
+    DEBOUNCE_WAIT = 30
+
+    aplaut_client = AplautClient()
+
     ## * Create task
 
     # task_id = ""
-
     # try:
-    #     response = request_aplaut(
+    #     response = aplaut_client.request(
     #         method="POST",
     #         endpoint="/v4/export_tasks",
     #         body={
@@ -114,9 +190,10 @@ def fetch_data_callable():
     #             },
     #         },
     #     )
+    #     task_id = response.json().get("data", {}).get("id")
 
-    #     task_id = response.json().get("data").get("id")
-    # except Exception:
+    # except Exception as e:
+    #     logging.error(f"failed to create export task: {e}")
     #     raise
 
     # if not task_id:
@@ -126,113 +203,78 @@ def fetch_data_callable():
 
     task_id = "68c15ea9e13c7500169afba1"
 
-    state = ""
-    file_url = ""
+    logging.info(f"fetched task_id={task_id}")
 
-    try_count = 0
+    retry_count = 0
+    debounce_count = 0
+    file_url = None
 
-    while True:
+    while retry_count < MAX_RETRIES:
         response = {}
 
         try:
-            response = request_aplaut(
+            response = aplaut_client.request(
                 method="GET",
                 endpoint=f"/v4/export_tasks/{task_id}",
             )
         except Exception:
             raise
 
-        attributes = response.json().get("data").get("attributes")
-        state = attributes.get("state")
+        attributes = response.json().get("data", {}).get("attributes", {})
+        state = attributes.get("state", "")
 
         if not state:
             raise ErrUndefinedTaskState
 
+        logging.info(f"tracking state: retry_count={retry_count} state={state}")
+
         if state == "processing":
-            time.sleep(120)
+            time.sleep(POLLING_INTERVAL)
+            retry_count += 1
             continue
 
         if state == "completed":
-            file_url = attributes.get("archive_url")
+            file_url = attributes.get("archive_url", "")
 
-            if file_url:  
-                break # success
+            if file_url:
+                # success
+                break
+            elif debounce_count < MAX_DEBOUNCE:
+                # suggested to debounce one more time,
+                # if request state="success" and no url provided.
+                debounce_count += 1
+                time.sleep(DEBOUNCE_WAIT)
+                continue
             else:
-                if try_count < 1: # debounce on one more try with wait time.
-                    try_count = try_count + 1
-                    time.sleep(30)
-                    continue
-                else:
-                    raise ErrFileUrlEmpty
+                raise ErrFileUrlEmpty
 
-        logging.error(f"undefined state={state}") # any other state
+        logging.error(f"undefined state={state}")
         raise ErrUndefinedTaskState
 
-    ## * Get file
+    if not file_url:
+        logging.error(f"source service didn't provide file_url")
+        raise ErrServiceNA
 
-    local_filename = "source_product_reviews.csv.gz"
+    ## * Download file
 
+    local_filename = "aplaud_product_reviews.csv.gz"
     local_dir = tempfile.gettempdir()
     local_path = os.path.join(local_dir, local_filename)
 
-    with requests.get(file_url, stream=True) as r:
-        r.raise_for_status()
-        with open(local_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-    logging.info(f"stored={local_path}")
-
-    source_data = []
-
-    with gzip.open(local_path, mode="rt", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            source_data.append(
-                {
-                    "product_id": row.get("EXTERNAL ID"),
-                    "reviews_count": parse_int(row.get("REVIEWS COUNT", 0)),
-                    "rating": parse_float(row.get("RATING", 0)),
-                }
-            )
-
-    logging.info(f"records count={len(source_data)}")
+    download_file(file_url, local_path)
+    source_data = process_csv_file(local_path)
 
     put_to_s3(data=source_data, s3_key=S3_FILE_NAME)
 
 
-# def delete_previous_data_callable():
-#     # temp skip
-#     logging.info("done")
-
-
 def upsert_to_es_callable():
+    es_client = ElasticsearchClient()
+
     source_data = get_from_s3(s3_key=S3_FILE_NAME)
+    logging.info(f"source_data count={len(source_data)}")
 
-    existing_ids_query = {
-        "_source": False,
-        "fields": ["_id"],
-        "query": {"match_all": {}},
-    }
-
-    client = elastic_conn(Variable.get("elastic_scheme"))
-
-    existing_ids = set()
-    scroll_id = Any
-    try:
-        response = client.search(
-            index=INDEX_NAME, body=existing_ids_query, size=5000, scroll="2m"
-        )
-        scroll_id = response["_scroll_id"]
-        existing_ids = {hit["_id"] for hit in response["hits"]["hits"]}
-        while len(response["hits"]["hits"]) > 0:
-            response = client.scroll(scroll_id=scroll_id, scroll="2m")
-            existing_ids.update(hit["_id"] for hit in response["hits"]["hits"])
-    except Exception as e:
-        logging.error(f"failed to fetch ids from Elasticsearch: {e}")
-        raise
-    finally:
-        if scroll_id:
-            client.clear_scroll(scroll_id=scroll_id)
+    existing_ids = es_client.get_existing_product_ids(INDEX_NAME)
+    logging.info(f"existings_ids count={len(existing_ids)}")
 
     actions = [
         {
@@ -250,25 +292,12 @@ def upsert_to_es_callable():
         for record in source_data
         if record.get("product_id") and record.get("product_id") in existing_ids
     ]
-
-    logging.info(f"source_data count={len(source_data)}")
-    logging.info(f"existings_ids count={len(existing_ids)}")
     logging.info(f"actions count={len(actions)}")
 
-    try:
-        success, errors = helpers.bulk(
-            client, actions, refresh="wait_for", stats_only=False
-        )
-        logging.info(f"update success, updated documents count={success}")
-        if errors:
-            logging.error(f"error during bulk update: {errors}")
-    except Exception as bulk_error:
-        logging.error(f"bulk update failed, error: {bulk_error}")
-        raise
-
-
-# def calculate_category_avg_reviews_callable():
-#     logging.info("calculate it!")
+    if actions:
+        es_client.bulk_update_records(actions)
+    else:
+        logging.info("no records to update")
 
 
 with DAG(
@@ -285,19 +314,9 @@ with DAG(
         python_callable=fetch_data_callable,
     )
 
-    # delete_previous_data = PythonOperator(
-    #     task_id="delete_previous_data_task",
-    #     python_callable=delete_previous_data_callable,
-    # )
-
     upsert_to_es = PythonOperator(
         task_id="upsert_to_es_task",
         python_callable=upsert_to_es_callable,
     )
 
-    # calculate_category_avg_reviews = PythonOperator(
-    #     task_id="calculate_category_avg_reviews_task",
-    #     python_callable=calculate_category_avg_reviews_callable,
-    # )
-
-    fetch_data >> upsert_to_es  # >> delete_previous_data
+    fetch_data >> upsert_to_es

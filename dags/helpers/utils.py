@@ -19,7 +19,7 @@ def request_to_1c(host: str, dic_name: str) -> dict:
     try:
         resp = requests.post(url, timeout=30)
         resp.raise_for_status()
-    except Exception as e: 
+    except Exception as e:
         logging.error(f"request_to_1c error, response={resp.text[:2000]}")
         raise e
 
@@ -74,10 +74,7 @@ def elastic_conn(scheme: str) -> Any:
     return es_hook.get_conn
 
 
-def put_to_s3(
-    data: Any,
-    s3_key: str,
-):
+def put_to_s3(data: Any, s3_key: str):
     data_bytes = json.dumps(data, ensure_ascii=False).encode("utf-8")
 
     # Загружаем в S3
@@ -110,3 +107,17 @@ def fetch_with_retry(url: str, params=None, retries=3):
                 time.sleep(1 * (attempt + 1))
             else:
                 raise
+
+
+def parse_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

@@ -113,6 +113,8 @@ class ElasticsearchClient:
             if scroll_id:
                 self.client.clear_scroll(scroll_id=scroll_id)
 
+        return existing_ids
+
     def bulk_update_records(self, actions: List[Dict]):
         try:
             success, errors = helpers.bulk(

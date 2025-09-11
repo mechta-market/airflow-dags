@@ -55,28 +55,29 @@ class AplautClient:
         return token
 
     def request(self, method: str, endpoint: str, data: Dict = None) -> Any:
+        http_hook = HttpHook(http_conn_id=self.__conn_id, method=method)
+
         headers = {
             "Authorization": f"Bearer {self.__token}",
             "Content-Type": "application/json",
         }
 
-        http_hook = HttpHook(http_conn_id=self.__conn_id, method=method)
+        response = None
 
         try:
             response = http_hook.run(
                 endpoint=endpoint,
                 headers=headers,
                 data=data,
-                extra_options={"timeout": 60},
+                # extra_options={"timeout": 60},
             )
-            response.raise_for_status()
-            return response
-
         except Exception as e:
-            logging.error(f"aplaut api request failed: exception={e}")
             if response:
                 logging.error(f"response={response.text}")
+            logging.error(f"aplaut api request failed: exception={e}")
             raise
+
+        return response
 
 
 class ElasticsearchClient:

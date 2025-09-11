@@ -92,7 +92,6 @@ class ElasticsearchClient:
         request_body = {
             "_source": False,
             "query": {"match_all": {}},
-            "sort": [{"id": "asc"}],
         }
 
         scroll_id = None

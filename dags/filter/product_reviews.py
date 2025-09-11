@@ -28,7 +28,7 @@ default_args = {
 
 # Constants
 
-INDEX_NAME = "product_test"
+INDEX_NAME = "product_v2"
 S3_FILE_NAME = f"{DAG_ID}/product_reviews.json"
 VARIABLE_APLAUT_LAST_UPDATED_AT_KEY = "aplaut_last_updated_at"
 
@@ -310,17 +310,23 @@ def upsert_to_es_callable():
     else:
         logging.info("no records to update")
 
+
+def update_last_updated_at_date_callable():
     tz = timezone(timedelta(hours=5))
     now = datetime.now(tz)
-    formatted_now = now.isoformat()
 
-    Variable.set(VARIABLE_APLAUT_LAST_UPDATED_AT_KEY, formatted_now)
+    # to be safe and avoid lacking of records, it is taken 1 day back:
+    one_day_ago = now - timedelta(days=1)
+    formatted_date = one_day_ago.isoformat()
+
+    Variable.set(VARIABLE_APLAUT_LAST_UPDATED_AT_KEY, formatted_date)
+    logging.info(f"last_updated_at={formatted_date}")
 
 
 with DAG(
     dag_id=DAG_ID,
     default_args=default_args,
-    schedule="0 0 * * *",
+    schedule="20 0 * * *",
     start_date=datetime(2025, 8, 22),
     catchup=False,
     tags=["elasticsearch", "site", "product"],
@@ -336,4 +342,9 @@ with DAG(
         python_callable=upsert_to_es_callable,
     )
 
-    fetch_data >> upsert_to_es
+    update_last_updated_at_date = PythonOperator(
+        task_id="update_last_updated_at_date_task",
+        python_callable=update_last_updated_at_date_callable,
+    )
+
+    fetch_data >> upsert_to_es >> update_last_updated_at_date

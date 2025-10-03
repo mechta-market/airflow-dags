@@ -59,7 +59,7 @@ class DocumentEmployee:
             self.hire_date = None
 
         if self._check_date(p, "vacation_end_date"):
-            self.vacation_end_date = p.get(p, "vacation_end_date")
+            self.vacation_end_date = p.get("vacation_end_date")
         else:
             self.vacation_end_date = None
 

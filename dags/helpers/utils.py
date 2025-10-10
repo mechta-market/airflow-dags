@@ -2,8 +2,9 @@ import json
 import logging
 import time
 import requests
-from typing import Any
+from typing import Any, Dict
 
+from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
@@ -11,7 +12,7 @@ from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPyt
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 BUCKET_NAME = "airflow"
 S3_CONN_ID = "s3"
-
+SHOP_DEFAULT_DB_NAME = "AstOffice"
 
 def request_to_1c(host: str, dic_name: str) -> dict:
     url = f"{host}/send/by_db_name/AstOffice/getbaseinfo/{dic_name}"
@@ -32,6 +33,33 @@ def request_to_1c_with_data(host: str, dic_name: str, payload) -> dict:
     resp = requests.post(url, timeout=30, json=payload)
     resp.raise_for_status()
     return resp.json()
+
+def request_to_onec_proxy(body: Dict = None) -> dict:
+    http_hook = HttpHook(http_conn_id="onec_proxy", method="POST")
+    
+    response = None
+
+    try:
+        response = http_hook.run(
+            endpoint="/send",
+            headers={
+                "Content-Type": "application/json" 
+            },
+            json=body,
+        )
+    except Exception as e:
+        if response:
+            logging.error(f"response={response.text[:2000]}")
+        logging.error(f"onec_proxy request failed: exception={e}")
+        raise e
+    
+    response_obj = response.json()
+
+    if response_obj.get("error", False) == True:
+        logging.error(f"onec_proxy responded with error and error_message={response_obj.get("error_message", "")}")
+        raise ValueError("error=True")
+
+    return response_obj.get("body", {})
 
 
 def normalize_zero_uuid_fields(item: dict, fields: list[str]) -> dict:

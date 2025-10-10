@@ -47,6 +47,7 @@ def request_to_onec_proxy(body: Dict = None) -> dict:
             },
             json=body,
         )
+        response.raise_for_status()
     except Exception as e:
         if response:
             logging.error(f"response={response.text[:2000]}")

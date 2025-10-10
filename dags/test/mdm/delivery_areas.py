@@ -44,6 +44,8 @@ def fetch_data_callable() -> None:
         )
         return
 
+    logging.info(f"data count={len(response.get("data", []))}")
+
     put_to_s3(data=response.get("data"), s3_key=S3_FILE_NAME)
 
 
@@ -58,7 +60,6 @@ def normalize_data_callable() -> None:
         if item.get("id") == ZERO_UUID:
             continue
         normalized.append(normalize_zero_uuid_fields(item, NORMALIZE_FIELDS))
-
 
     put_to_s3(data=normalized, s3_key=S3_FILE_NAME)
 
@@ -142,7 +143,16 @@ def upsert_to_es_callable():
     logging.info(f"actions count={len(actions)}")
 
     if actions:
-        es_client.bulk_update_records(actions)
+        try:
+            success, errors = helpers.bulk(
+                es_client, actions, refresh="wait_for", stats_only=False
+            )
+            logging.info(f"update success, updated documents count={success}")
+            if errors:
+                logging.error(f"error during bulk update: {errors}")
+        except Exception as bulk_error:
+            logging.error(f"bulk update failed, error: {bulk_error}")
+            raise
     else:
         logging.info("no records to update")
 

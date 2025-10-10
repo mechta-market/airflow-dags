@@ -58,6 +58,11 @@ class DocumentEmployee:
         else:
             self.hire_date = None
 
+        if self._check_date(p, "vacation_end_date"):
+            self.vacation_end_date = p.get("vacation_end_date")
+        else:
+            self.vacation_end_date = None
+
         self.available_vacation_days = p.get("available_vacation_days", "")
         self.active = p.get("active", False)
         self.status = p.get("status", "")

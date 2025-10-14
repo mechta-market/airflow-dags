@@ -1,0 +1,976 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "MDM API Documentation",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "name": "City",
+      "description": "справочная информация по городам"
+    },
+    {
+      "name": "DeliveryAreas",
+      "description": "справочная информация по районом доставки"
+    },
+    {
+      "name": "DeliveryService",
+      "description": "справочная информация по сервисам доставки"
+    },
+    {
+      "name": "Employee",
+      "description": "справочная информация по сотрудником"
+    },
+    {
+      "name": "Node",
+      "description": "справочная информация по нодам"
+    },
+    {
+      "name": "Organisation",
+      "description": "справочная информация по организациям"
+    },
+    {
+      "name": "Product",
+      "description": "справочная информация по товаром"
+    },
+    {
+      "name": "ProductBarcode",
+      "description": "справочная информация по штрих-кодам товаров"
+    },
+    {
+      "name": "ProductCategory",
+      "description": "справочная информация по категориям товаров"
+    },
+    {
+      "name": "Subdivision",
+      "description": "справочная информация по подразделениям"
+    },
+    {
+      "name": "Warehouse",
+      "description": "справочная информация по складам"
+    }
+  ],
+  "basePath": "/mdm",
+  "schemes": [
+    "https",
+    "http"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+
+  "paths": {
+    "/city/_doc/{id}": {
+      "get": {
+        "operationId": "City_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "City"
+        ]
+      }
+    },
+    "/city/_search": {
+      "post": {
+        "operationId": "City_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "City"
+        ]
+      }
+    },
+
+    "/delivery_areas/_doc/{id}": {
+      "get": {
+        "operationId": "DeliveryAreas_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "DeliveryAreas"
+        ]
+      }
+    },
+    "/delivery_areas/_search": {
+      "post": {
+        "operationId": "DeliveryAreas_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "DeliveryAreas"
+        ]
+      }
+    },
+
+    "/delivery_service/_doc/{id}": {
+      "get": {
+        "operationId": "DeliveryService_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "DeliveryService"
+        ]
+      }
+    },
+    "/delivery_service/_search": {
+      "post": {
+        "operationId": "DeliveryService_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "DeliveryService"
+        ]
+      }
+    },
+
+    "/employee/_doc/{id}": {
+      "get": {
+        "operationId": "Employee_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Employee"
+        ]
+      }
+    },
+    "/employee/_search": {
+      "post": {
+        "operationId": "Employee_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "Employee"
+        ]
+      }
+    },
+
+    "/node/_doc/{id}": {
+      "get": {
+        "operationId": "Node_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Node"
+        ]
+      }
+    },
+    "/node/_search": {
+      "post": {
+        "operationId": "Node_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "Node"
+        ]
+      }
+    },
+
+    "/organisation/_doc/{id}": {
+      "get": {
+        "operationId": "Organisation_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Organisation"
+        ]
+      }
+    },
+    "/organisation/_search": {
+      "post": {
+        "operationId": "Organisation_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "Organisation"
+        ]
+      }
+    },
+
+    "/product/_doc/{id}": {
+      "get": {
+        "operationId": "Product_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Product"
+        ]
+      }
+    },
+    "/product/_search": {
+      "post": {
+        "operationId": "Product_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "Product"
+        ]
+      }
+    },
+
+    "/product_barcode/_doc/{id}": {
+      "get": {
+        "operationId": "ProductBarcode_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ProductBarcode"
+        ]
+      }
+    },
+    "/product_barcode/_search": {
+      "post": {
+        "operationId": "ProductBarcode_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "ProductBarcode"
+        ]
+      }
+    },
+
+    "/product_category/_doc/{id}": {
+      "get": {
+        "operationId": "ProductCategory_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ProductCategory"
+        ]
+      }
+    },
+    "/product_category/_search": {
+      "post": {
+        "operationId": "ProductCategory_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "ProductCategory"
+        ]
+      }
+    },
+
+    "/subdivision/_doc/{id}": {
+      "get": {
+        "operationId": "Subdivision_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Subdivision"
+        ]
+      }
+    },
+    "/subdivision/_search": {
+      "post": {
+        "operationId": "Subdivision_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "Subdivision"
+        ]
+      }
+    },
+
+    "/warehouse/_doc/{id}": {
+      "get": {
+        "operationId": "Warehouse_DocId",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseMain"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "Warehouse"
+        ]
+      }
+    },
+    "/warehouse/_search": {
+      "post": {
+        "operationId": "Warehouse_Search",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchRep"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/mdm_v1ErrorMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required":  true,
+            "schema": {
+              "$ref": "#/definitions/mdm_v1BaseSearchBody"
+            }
+          }
+        ],
+        "tags": [
+          "Warehouse"
+        ]
+      }
+    }
+  },
+
+  "definitions": {
+    "mdm_v1ErrorMessage": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "root_cause": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "type": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "caused_by": {
+              "type": "object",
+              "properties":  {
+                "type": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "status": {
+          "type": "number"
+        }
+      }
+    },
+    "mdm_v1BaseSearchBody": {
+      "type": "object",
+      "properties": {
+        "track_total_hits": {
+          "type": "boolean",
+          "example": false
+        },
+        "_source": {
+          "type": "array",
+          "items":  {
+            "type": "string"
+          }
+        },
+        "from": {
+          "type": "integer"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "query": {
+          "type": "object"
+        },
+        "sort": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "example": "asc|desc"
+              }
+            }
+          }
+        },
+        "aggs": {
+          "type": "object"
+        },
+        "highlight": {
+          "type": "object"
+        },
+        "post_filter": {
+          "type": "object"
+        },
+        "collapse": {
+          "type": "object"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "version": {
+          "type": "boolean",
+          "example": "false"
+        }
+      }
+    },
+    "mdm_v1BaseSearchRepItem": {
+      "type": "object",
+      "properties": {
+        "_index": {
+          "type": "string"
+        },
+        "_id":  {
+          "type": "string"
+        },
+        "_score": {
+          "type": "number",
+          "example": 0.0
+        },
+        "_source": {
+          "type": "object"
+        }
+      }
+    },
+    "mdm_v1BaseSearchRep": {
+      "type": "object",
+      "properties": {
+        "took": {
+          "type": "number"
+        },
+        "timed_out": {
+          "type": "boolean",
+          "example": false
+        },
+        "_shards": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "integer"
+            },
+            "successful": {
+              "type": "integer"
+            },
+            "skipped": {
+              "type": "integer"
+            },
+            "failed": {
+              "type": "integer"
+            }
+          }
+        },
+        "hits": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "number"
+                },
+                "relation": {
+                  "type": "string"
+                }
+              }
+            },
+            "max_score": {
+              "type": "number",
+              "example": 0.0
+            },
+            "hits": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "$ref": "#/definitions/mdm_v1BaseSearchRepItem"
+              }
+            }
+          }
+        }
+      }
+    },
+    "mdm_v1BaseMain": {
+      "type": "object",
+      "properties": {
+        "_index": {
+          "type": "string"
+        },
+        "_id": {
+          "type": "string"
+        },
+        "_version": {
+          "type": "integer"
+        },
+        "_seq_no": {
+          "type": "integer"
+        },
+        "_primary_term": {
+          "type": "integer"
+        },
+        "found": {
+          "type": "boolean",
+          "example": true
+        },
+        "_source": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "securityDefinitions": {
+    "bearer": {
+      "type": "apiKey",
+      "description": "Authentication token, prefixed by Bearer: Bearer \u003ctoken\u003e",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ]
+}

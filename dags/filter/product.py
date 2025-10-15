@@ -113,6 +113,7 @@ class DocumentProduct:
             "count": pre_order.get("count", 0),
         }
 
+    # _parse_properties is used to make filter properties for aggregations and search purposes.
     def _parse_properties(self, property_model: dict) -> List[Dict[str, Any]]:
         properties = []
         attr_ord_counter = 0
@@ -191,9 +192,17 @@ class DocumentProduct:
                     properties.append(p)
         return properties
 
-    def _parse_all_properties(self, property_model: dict) -> List[Dict[str, Any]]:
+    def _parse_all_properties(self, property_model: dict) -> Dict[str, Any]:
+        if not property_model:
+            return { "groups": [] }
+
         groups = property_model.get("groups") or []
         result_groups: List[Dict[str, Any]] = []
+
+        boolean_values_map = {
+            "true": { "ru": "Да", "kz": "Иә" },
+            "false": { "ru": "Нет", "kz": "Жоқ" }
+        }
 
         for group in groups:
             attributes: List[Dict[str, Any]] = []
@@ -202,14 +211,9 @@ class DocumentProduct:
                 opts = data.get("options") or []
                 m_unit_i18n = data.get("m_unit_i18n") or {}
 
-                # Строим fast lookup для меток
-                label_map = {
-                    opt.get("label", ""): {
-                        "label_i18n": opt.get("label_i18n", {}),
-                        "m_unit_i18n": m_unit_i18n,
-                    }
-                    for opt in opts
-                    if isinstance(opt, dict)
+                options_map = {
+                    str(opt.get("value")): opt.get("label_i18n", {})
+                    for opt in opts if isinstance(opt, dict) and opt.get("value")
                 }
 
                 value = attribute.get("value") or {}
@@ -220,31 +224,23 @@ class DocumentProduct:
                 # Собираем values
                 values: List[Dict[str, Any]] = []
                 for slug, v_i18n in zip(slugs, vals_i18n):
-                    ru_label = v_i18n.get("ru", "")
-                    opt_info = label_map.get(ru_label, {})
-                    label_i18n = opt_info.get("label_i18n") or v_i18n
+                    if not isinstance(v_i18n, dict) or not v_i18n:
+                        continue
 
-                    # Если числовой тип, добавляем единицу измерения в каждую языковую версию
-                    if attr_type == "number" and m_unit_i18n:
-                        ru_text = label_i18n.get("ru", "")
-                        combined = {
-                            lang: f"{ru_text} {m_unit_i18n.get(lang, '')}".strip()
-                            for lang in m_unit_i18n
-                        }
-                        label_i18n = combined
+                    ru_value = v_i18n.get(DEFAULT_LANGUAGE, "")
 
-                    # Если boolean тип, меняем значения на Да/Нет
                     if attr_type == "boolean":
-                        if ru_label == "true":
-                            label_i18n = {
-                                "kz": "Иә",
-                                "ru": "Да",
-                            }
-                        if ru_label == "false":
-                            label_i18n = {
-                                "kz": "Жоқ",
-                                "ru": "Нет",
-                            }
+                        label_i18n = boolean_values_map.get(ru_value, {}).copy()
+                    elif attr_type == "number":
+                        label_i18n = {
+                            lang: f"{ru_value} {m_unit_i18n.get(lang, '')}".strip()
+                            for lang in TARGET_LANGUAGES
+                        }
+                    elif attr_type in ("select", "multi-select"):
+                        label_i18n = options_map.get(str(ru_value), {})
+                    else:
+                        label_i18n = v_i18n.copy() if v_i18n else {}
+
                     values.append(
                         {
                             "slug": slug,

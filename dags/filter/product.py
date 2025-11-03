@@ -45,6 +45,7 @@ class DocumentProduct:
         self.prev_slug = p.get("prev_slug", [])
 
         self.created_at = p.get("created_at")
+        self.publication_ts = p.get("publication_ts")
 
         self.type = p.get("type", 0)
         self.service_type = p.get("service_type", 0)
@@ -644,7 +645,7 @@ with DAG(
     default_args=default_args,
     description="DAG to upload products from NSI service to Elasticsearch index",
     start_date=datetime(2025, 6, 10),
-    schedule="0 */6 * * *",
+    schedule="0 * * * *",
     max_active_runs=1,
     catchup=False,
     tags=["elasticsearch", "nsi", "product"],

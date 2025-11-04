@@ -18,16 +18,16 @@ from helpers.utils import (
     SHOP_DEFAULT_DB_NAME
 )
 
-DAG_ID = "delivery_areas"
+DAG_ID = "delivery_area"
 default_args = {
     "owner": "Olzhas",
     "depends_on_past": False,
 }
-INDEX_NAME = "delivery_areas"
+INDEX_NAME = "delivery_area"
 
 NORMALIZE_FIELDS = ["parent_id", "organization"]
 
-S3_FILE_NAME = f"{DAG_ID}/delivery_areas.json"
+S3_FILE_NAME = f"{DAG_ID}/delivery_area.json"
 
 
 def fetch_data_callable() -> None:

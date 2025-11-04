@@ -25,7 +25,7 @@ default_args = {
 }
 INDEX_NAME = "delivery_areas"
 
-NORMALIZE_FIELDS = ["parent_id"]
+NORMALIZE_FIELDS = ["parent_id", "organization"]
 
 S3_FILE_NAME = f"{DAG_ID}/delivery_areas.json"
 
@@ -35,7 +35,7 @@ def fetch_data_callable() -> None:
         "method": "GET",
         "path": "/getbaseinfo/delivery_areas",
         "node": {
-            "name": SHOP_DEFAULT_DB_NAME
+            "name": "AstInetShop" # SHOP_DEFAULT_DB_NAME
         }
     })
     if not response.get("success", False):

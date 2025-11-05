@@ -36,6 +36,9 @@ def fetch_data_callable() -> None:
         "path": "/getbaseinfo/delivery_areas",
         "node": {
             "name": "AstInetShop" # SHOP_DEFAULT_DB_NAME
+        },
+        "params": {
+            "full_unloading": "true"
         }
     })
     if not response.get("success", False):

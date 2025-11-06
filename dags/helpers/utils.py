@@ -8,6 +8,7 @@ from airflow.providers.http.hooks.http import HttpHook
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.elasticsearch.hooks.elasticsearch import ElasticsearchPythonHook
 
+SERVICE_NAME = "mdm"
 
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 BUCKET_NAME = "airflow"
@@ -36,6 +37,11 @@ def request_to_1c_with_data(host: str, dic_name: str, payload) -> dict:
 
 def request_to_onec_proxy(body: Dict = None) -> dict:
     http_hook = HttpHook(http_conn_id="onec_proxy", method="POST")
+
+    if body is None:
+        body = {}
+
+    body["source"] = SERVICE_NAME
     
     response = None
 

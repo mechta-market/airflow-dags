@@ -14,6 +14,7 @@ from helpers.utils import (
     put_to_s3,
     get_from_s3,
     SHOP_DEFAULT_DB_NAME,
+    ZERO_UUID,
 )
 
 # Constants
@@ -34,75 +35,46 @@ S3_FILE_NAME = f"{DAG_ID}/product_mappings.json"
 BATCH_SIZE = 250
 
 
-def fetch_products_and_create_mappings(**context) -> None:
-    logger = logging.getLogger(__name__)
-    task_instance = context["ti"]
-
+def fetch_products_and_create_mappings() -> None:
     try:
-        logger.info("Starting products fetch and mapping")
-
+        logging.info("Starting products fetch and mapping")
         client = elastic_conn(Variable.get("elastic_scheme"))
 
-        vat_dict = {}
+        vat_dict = fetch_vat_rates(client)
 
-        try:
-            if client.indices.exists(index=INDEX_NAME_VAT_RATE):
-                q = {"query": {"match_all": {}}, "size": 100}
-                resp = client.search(index=INDEX_NAME_VAT_RATE, body=q, scroll="2m")
-                scroll_id = resp.get("_scroll_id")
-                hits = resp.get("hits", {}).get("hits", [])
-
-                while hits:
-                    for hit in hits:
-                        vat_id = hit.get("_id")
-                        vat_src = hit.get("_source") or {}
-                        vat_dict[str(vat_id)] = vat_src if vat_src else None
-
-                    # fetch next page
-                    resp = client.scroll(scroll_id=scroll_id, scroll="2m")
-                    scroll_id = resp.get("_scroll_id")
-                    hits = resp.get("hits", {}).get("hits", [])
-
-                # cleanup scroll
-                try:
-                    if scroll_id:
-                        client.clear_scroll(scroll_id=scroll_id)
-                except Exception as e:
-                    logger.debug(f"clear_scroll failed or unnecessary {str(e)}")
-                logger.info(f"Loaded {len(vat_dict)} VAT rates from Elasticsearch index: {INDEX_NAME_VAT_RATE}")
-            else:
-                logger.warning(f"VAT index {INDEX_NAME_VAT_RATE} does not exist, using empty VAT mapping")
-        except Exception as e:
-            logger.error(f"Failed to fetch VAT rates from Elasticsearch: {str(e)}")
+        if not vat_dict:
+            logging.error("No VAT rates fetched - this is required data")
+            raise Exception("Cannot proceed without VAT rates data")
 
         response = request_to_onec_proxy(body={
             "method": "POST",
             "path": "/getbaseinfo/product",
-            "node": {"name": SHOP_DEFAULT_DB_NAME},
-            "source": "mdm"
+            "node": {"name": SHOP_DEFAULT_DB_NAME}
         })
+
+        if not response.get("success", False):
+            logging.error(f"Failed to fetch measurement units, success: {response.get('success', False)}")
+            raise
 
         products = response.get("data", [])
 
         if not products:
-            logger.warning("No product data received from 1C API")
-            return
+            logging.error("No product data received from 1C API")
+            raise
 
         product_mappings = []
         skipped_products = 0
 
         for product in products:
             product_id = product.get("id")
-            if not product_id:
+            if not product_id or product_id == ZERO_UUID:
                 skipped_products += 1
                 continue
 
             product_vat_id = product.get("vat_rate")
             vat_rate_value = None
-            if product_vat_id:
+            if product_vat_id and product_vat_id != ZERO_UUID:
                 vat_rate_value = vat_dict.get(str(product_vat_id), None)
-                if not vat_rate_value:
-                    logger.debug(f"No VAT rate found for product {product_id} with VAT ID: {product_vat_id}")
 
             mapping = {
                 "id": product_id,
@@ -112,22 +84,64 @@ def fetch_products_and_create_mappings(**context) -> None:
             product_mappings.append(mapping)
 
         if skipped_products > 0:
-            logger.warning(f"Skipped {skipped_products} products without ID")
+            logging.warning(f"Skipped {skipped_products} products without ID")
 
         put_to_s3(data=product_mappings, s3_key=S3_FILE_NAME)
-        task_instance.xcom_push(key="products_count", value=len(product_mappings))
 
-        logger.info(f"Successfully created mappings for {len(product_mappings)} products")
-        logger.info(
+        logging.info(f"Successfully created mappings for {len(product_mappings)} products")
+        logging.info(
             f"VAT rate mapping coverage: {len([m for m in product_mappings if m['vat_rate']])}/{len(product_mappings)} products have VAT rates")
 
     except Exception as e:
-        logger.error(f"Failed to fetch products and create mappings: {str(e)}")
+        logging.error(f"Failed to fetch products and create mappings: {str(e)}")
         raise
 
-def check_existing_documents(client: Any, index_name: str, document_ids: List[str]) -> set:
-    logger = logging.getLogger(__name__)
 
+def fetch_vat_rates(client) -> dict:
+    vat_dict = {}
+    scroll_id = None
+
+    try:
+        if not client.indices.exists(index=INDEX_NAME_VAT_RATE):
+            logging.error(f"Index {INDEX_NAME_VAT_RATE} does not exist")
+            raise Exception(f"Required index {INDEX_NAME_VAT_RATE} not found")
+
+        query = {"query": {"match_all": {}}, "size": 100}
+        response = client.search(index=INDEX_NAME_VAT_RATE, body=query, scroll="2m")
+        scroll_id = response.get("_scroll_id")
+        hits = response.get("hits", {}).get("hits", [])
+
+        if not hits:
+            logging.warning(f"Index {INDEX_NAME_VAT_RATE} exists but contains no VAT rates")
+            raise Exception("No VAT rates found in index")
+
+        while hits:
+            for hit in hits:
+                vat_id = hit.get("_id")
+                vat_src = hit.get("_source", {})
+                if vat_src:
+                    vat_dict[str(vat_id)] = vat_src
+
+            response = client.scroll(scroll_id=scroll_id, scroll="2m")
+            scroll_id = response.get("_scroll_id")
+            hits = response.get("hits", {}).get("hits", [])
+
+        logging.info(f"Loaded {len(vat_dict)} VAT rates from Elasticsearch")
+
+    except Exception as e:
+        logging.error(f"Failed to fetch VAT rates from Elasticsearch: {str(e)}")
+        raise
+
+    finally:
+        if scroll_id:
+            try:
+                client.clear_scroll(scroll_id=scroll_id)
+            except Exception as e:
+                logging.debug(f"Scroll cleanup failed: {str(e)}")
+
+    return vat_dict
+
+def check_existing_documents(client: Any, index_name: str, document_ids: List[str]) -> set:
     existing_ids = set()
     batch_size = 500
 
@@ -146,56 +160,42 @@ def check_existing_documents(client: Any, index_name: str, document_ids: List[st
                     existing_ids.add(doc["_id"])
 
             if (i // batch_size) % 10 == 0:
-                logger.info(
+                logging.info(
                     f"Checked batch {i // batch_size + 1}/{(len(document_ids) - 1) // batch_size + 1}: {len(existing_ids)} existing so far")
 
 
         except Exception as e:
-            logger.error(f"Failed to check document existence for batch: {str(e)}")
+            logging.error(f"Failed to check document existence for batch: {str(e)}")
 
-    logger.info(f"Found {len(existing_ids)} existing documents out of {len(document_ids)} total")
+    logging.info(f"Found {len(existing_ids)} existing documents out of {len(document_ids)} total")
     return existing_ids
 
 def update_in_es_callable(**context) -> None:
-    logger = logging.getLogger(__name__)
-    task_instance = context["ti"]
-
     try:
-        logger.info("Starting product update process (existing documents only)")
+        logging.info("Starting product update process (existing documents only)")
 
         client = elastic_conn(Variable.get("elastic_scheme"))
 
-        if not hasattr(client, "bulk"):
-            raise RuntimeError("elastic_conn did not return a valid Elasticsearch client")
-
-        client.info()
-        logger.info("Elasticsearch connection established")
+        try:
+            client.info()
+        except Exception as e:
+            logging.error("Elasticsearch not available: %s", e)
+            raise
+        logging.info("Elasticsearch connection established")
 
         product_mappings = get_from_s3(s3_key=S3_FILE_NAME) or []
 
         if not product_mappings:
-            logger.warning("No product mappings found to update")
-            task_instance.xcom_push(key="product_update_results", value={
-                "total": 0,
-                "success": 0,
-                "errors": [],
-                "existing_count": 0
-            })
+            logging.warning("No product mappings found to update")
             return
 
         mapping_ids = [str(item.get("id")) for item in product_mappings if item.get("id")]
-        logger.info(f"Checking existence for {len(mapping_ids)} product IDs")
+        logging.info(f"Checking existence for {len(mapping_ids)} product IDs")
 
         existing_ids = check_existing_documents(client, INDEX_NAME, mapping_ids)
 
         if not existing_ids:
-            logger.warning("No existing products found to update")
-            task_instance.xcom_push(key="product_update_results", value={
-                "total": len(mapping_ids),
-                "success": 0,
-                "errors": [],
-                "existing_count": 0
-            })
+            logging.warning("No existing products found to update")
             return
 
         actions = []
@@ -225,7 +225,7 @@ def update_in_es_callable(**context) -> None:
                     "retry_on_conflict": 3,
                 })
 
-        logger.info(f"Preparing to update {len(actions)} existing products")
+        logging.info(f"Preparing to update {len(actions)} existing products")
 
         total_success = 0
         all_errors = []
@@ -244,34 +244,25 @@ def update_in_es_callable(**context) -> None:
 
                 total_success += success
                 if (i // BATCH_SIZE) % 10 == 0:
-                    logger.info(f"Product batch {i // BATCH_SIZE + 1}: {success} documents updated")
+                    logging.info(f"Product batch {i // BATCH_SIZE + 1}: {success} documents updated")
 
                 if errors:
-                    logger.error(f"Product batch {i // BATCH_SIZE + 1} had {len(errors)} errors")
+                    logging.error(f"Product batch {i // BATCH_SIZE + 1} had {len(errors)} errors")
                     all_errors.extend(errors)
 
             except Exception as bulk_error:
-                logger.error(f"Bulk operation failed for product batch {i // BATCH_SIZE + 1}: {str(bulk_error)}")
+                logging.error(f"Bulk operation failed for product batch {i // BATCH_SIZE + 1}: {str(bulk_error)}")
                 all_errors.append({"batch": i // BATCH_SIZE + 1, "error": str(bulk_error)})
 
             time.sleep(0.1)
 
         client.indices.refresh(index=INDEX_NAME)
 
-        results = {
-            "total": len(mapping_ids),
-            "success": total_success,
-            "errors": all_errors,
-            "existing_count": len(existing_ids)
-        }
-
-        logger.info(
+        logging.info(
             f"Product update completed: {total_success}/{len(existing_ids)} existing products updated, {len(all_errors)} errors")
 
-        task_instance.xcom_push(key="product_update_results", value=results)
-
     except Exception as e:
-        logger.error(f"Product update process failed: {str(e)}")
+        logging.error(f"Product update process failed: {str(e)}")
         raise
 
 
@@ -283,7 +274,6 @@ with DAG(
         catchup=False,
         max_active_runs=1,
         tags=["1c", "elasticsearch", "product", "measurement_unit", "okei_code", "vat", "shop"],
-        doc_md=__doc__,
 ) as dag:
 
     fetch_products = PythonOperator(

@@ -14,6 +14,7 @@ from helpers.utils import (
     put_to_s3,
     get_from_s3,
     SHOP_DEFAULT_DB_NAME,
+    ZERO_UUID,
 )
 
 # Constants
@@ -32,45 +33,46 @@ BATCH_SIZE = 250
 
 
 def fetch_data_callable(**context) -> None:
-    logger = logging.getLogger(__name__)
-    task_instance = context["ti"]
-
     try:
-        logger.info("Starting VAT fetch")
+        logging.info("Starting VAT fetch")
 
         response = request_to_onec_proxy(body={
             "method": "GET",
             "path": "/getbaseinfo/vat_rate",
-            "node": {"name": SHOP_DEFAULT_DB_NAME},
-            "source": "mdm"
+            "node": {"name": SHOP_DEFAULT_DB_NAME}
         })
+
+        if not response.get("success", False):
+            logging.error(
+                f"error: {response.get('error_code')}; desc: {response.get('desc')}"
+            )
+            logging.error(f"Failed to fetch measurement units, success: {response.get('success', False)}, response: {str(response)[:2000]}")
+            raise
 
         data = response.get("data", [])
 
         if not data:
-            logger.warning("No VAT data received from 1C API")
-            return
+            logging.error("No VAT data received from 1C API")
+            raise
 
-        valid_data = [item for item in data if item.get("id") is not None]
+        valid_data = [item for item in data if item.get("id") is not None and item.get("id") != ZERO_UUID]
         if len(valid_data) != len(data):
-            logger.warning(f"Filtered out {len(data) - len(valid_data)} items without ID")
+            logging.warning(f"Filtered out {len(data) - len(valid_data)} items without ID")
 
         put_to_s3(data=valid_data, s3_key=S3_FILE_NAME)
-        task_instance.xcom_push(key="VAT_count", value=len(valid_data))
 
-        logger.info(f"Successfully fetched {len(valid_data)} VAT")
+        logging.info(f"Successfully fetched {len(valid_data)} VAT")
 
     except Exception as e:
-        logger.error(f"Failed to fetch VAT: {str(e)}")
+        logging.error(f"Failed to fetch VAT: {str(e)}")
         raise
 
 def delete_previous_data_callable(**context):
-    logger = logging.getLogger(__name__)
     items = get_from_s3(s3_key=S3_FILE_NAME)
 
     if not items:
-        logger.info("No incoming VAT file found on S3; nothing to delete.")
-        return
+        logging.error("No incoming VAT file found on S3; nothing to delete.")
+        raise
 
     incoming_ids = {str(item["id"]) for item in items if item.get("id") is not None}
 
@@ -78,10 +80,10 @@ def delete_previous_data_callable(**context):
 
     try:
         if not client.indices.exists(index=INDEX_NAME):
-            logger.info(f"Index {INDEX_NAME} does not exist — skipping delete step.")
-            return
+            logging.info(f"Index {INDEX_NAME} does not exist — skipping delete step.")
+            raise
     except Exception as e:
-        logger.error(f"Failed checking index existence for {INDEX_NAME}: {e}")
+        logging.error(f"Failed checking index existence for {INDEX_NAME}: {e}")
         raise
 
     query = {"_source": False, "query": {"match_all": {}}}
@@ -103,21 +105,21 @@ def delete_previous_data_callable(**context):
                 existing_ids.add(h["_id"])
 
     except NotFoundError:
-        logger.info(f"Index {INDEX_NAME} not found during search; nothing to delete.")
-        return
+        logging.info(f"Index {INDEX_NAME} not found during search; nothing to delete.")
+        raise
     except Exception as e:
-        logger.error(f"failed to fetch ids from Elasticsearch: {e}")
+        logging.error(f"failed to fetch ids from Elasticsearch: {e}")
         raise
     finally:
         try:
             if scroll_id:
                 client.clear_scroll(scroll_id=scroll_id)
         except Exception:
-            logger.debug("clear_scroll failed or was unnecessary")
+            logging.debug("clear_scroll failed or was unnecessary")
 
     ids_to_delete = existing_ids - incoming_ids
     if not ids_to_delete:
-        logger.info("No stale documents to delete")
+        logging.info("No stale documents to delete")
         return
 
     actions = [
@@ -133,34 +135,28 @@ def delete_previous_data_callable(**context):
             stats_only=False,
             raise_on_error=False,
         )
-        logger.info(f"delete success, deleted document count={success}")
+        logging.info(f"delete success, deleted document count={success}")
         if errors:
-            logger.error(f"error during bulk delete: {errors}")
+            logging.error(f"error during bulk delete: {errors}")
     except Exception as bulk_error:
-        logger.error(f"bulk delete failed, error: {bulk_error}")
+        logging.error(f"bulk delete failed, error: {bulk_error}")
         raise
 
-    logger.info(f"Deleted {len(ids_to_delete)} stale documents from {INDEX_NAME}")
+    logging.info(f"Deleted {len(ids_to_delete)} stale documents from {INDEX_NAME}")
 
 def upsert_to_es_callable(**context) -> None:
-    logger = logging.getLogger(__name__)
-    task_instance = context["ti"]
-
     try:
-        logger.info("Starting VATs upsert")
+        logging.info("Starting VATs upsert")
 
         client = elastic_conn(Variable.get("elastic_scheme"))
-
-        if not hasattr(client, "bulk"):
-            raise RuntimeError("elastic_conn did not return a valid Elasticsearch client")
 
         try:
             client.info()
         except Exception as e:
-            logger.error("Elasticsearch not available: %s", e)
+            logging.error("Elasticsearch not available: %s", e)
             raise
 
-        logger.info("Elasticsearch connection established")
+        logging.info("Elasticsearch connection established")
 
         results = {}
 
@@ -190,7 +186,7 @@ def upsert_to_es_callable(**context) -> None:
                         raise_on_error=False,
                     )
                 except Exception as bulk_exc:
-                    logger.error(f"Bulk upsert raised exception: {bulk_exc}")
+                    logging.error(f"Bulk upsert raised exception: {bulk_exc}")
                     success = 0
                     errors = [{"error": str(bulk_exc)}]
 
@@ -199,32 +195,30 @@ def upsert_to_es_callable(**context) -> None:
                     "success": success,
                     "errors": errors
                 }
-                logger.info(f"VAT: {success} documents processed")
+                logging.info(f"VAT: {success} documents processed")
                 if errors:
-                    logger.error(f"Upsert errors sample: {errors[:3]}")
+                    logging.error(f"Upsert errors sample: {errors[:3]}")
             else:
                 results["vat"] = {"total": 0, "success": 0, "errors": []}
-                logger.info("No VAT to process")
+                logging.info("No VAT to process")
         else:
-            results["vat"] = {"total": 0, "success": 0, "errors": []}
-            logger.info("No VAT data found")
+            logging.error("No VAT data found")
+            raise
 
         # refresh destination index
         try:
             client.indices.refresh(index=INDEX_NAME)
         except Exception as e:
-            logger.warning(f"Failed to refresh index {INDEX_NAME}: {e}")
+            logging.warning(f"Failed to refresh index {INDEX_NAME}: {e}")
 
-        logger.info(
+        logging.info(
             "Dictionary upsert completed: %d successful, %d errors",
             results["vat"]["success"],
             len(results["vat"]["errors"])
         )
 
-        task_instance.xcom_push(key="dictionary_upsert_results", value=results)
-
     except Exception as e:
-        logger.error(f"Dictionary upsert process failed: {str(e)}")
+        logging.error(f"Dictionary upsert process failed: {str(e)}")
         raise
 
 
@@ -237,7 +231,6 @@ with DAG(
         catchup=False,
         max_active_runs=1,
         tags=["1c", "elasticsearch", "product", "vat", "shop"],
-        doc_md=__doc__,
 ) as dag:
 
     fetch_data = PythonOperator(

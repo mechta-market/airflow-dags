@@ -53,7 +53,7 @@ def fetch_products_and_create_mappings() -> None:
         })
 
         if not response.get("success", False):
-            logging.error(f"Failed to fetch measurement units, success: {response.get('success', False)}")
+            logging.error(f"Failed to fetch product, success: {response.get('success', False)}, response: {str(response)[:2000]}")
             raise
 
         products = response.get("data", [])

@@ -46,14 +46,19 @@ def fetch_products_and_create_mappings() -> None:
             logging.error("No VAT rates fetched - this is required data")
             raise Exception("Cannot proceed without VAT rates data")
 
-        response = request_to_onec_proxy(body={
-            "method": "POST",
-            "path": "/getbaseinfo/product",
-            "node": {"name": SHOP_DEFAULT_DB_NAME}
-        })
+        response = request_to_onec_proxy(
+            body={
+                "method": "POST",
+                "path": "/getbaseinfo/product",
+                "node": {"name": SHOP_DEFAULT_DB_NAME},
+                "body": {},
+            }
+        )
 
         if not response.get("success", False):
-            logging.error(f"Failed to fetch product, success: {response.get('success', False)}, response: {str(response)[:2000]}")
+            logging.error(
+                f"Failed to fetch product, success: {response.get('success', False)}, response: {str(response)[:2000]}"
+            )
             raise
 
         products = response.get("data", [])
@@ -88,9 +93,12 @@ def fetch_products_and_create_mappings() -> None:
 
         put_to_s3(data=product_mappings, s3_key=S3_FILE_NAME)
 
-        logging.info(f"Successfully created mappings for {len(product_mappings)} products")
         logging.info(
-            f"VAT rate mapping coverage: {len([m for m in product_mappings if m['vat_rate']])}/{len(product_mappings)} products have VAT rates")
+            f"Successfully created mappings for {len(product_mappings)} products"
+        )
+        logging.info(
+            f"VAT rate mapping coverage: {len([m for m in product_mappings if m['vat_rate']])}/{len(product_mappings)} products have VAT rates"
+        )
 
     except Exception as e:
         logging.error(f"Failed to fetch products and create mappings: {str(e)}")
@@ -112,7 +120,9 @@ def fetch_vat_rates(client) -> dict:
         hits = response.get("hits", {}).get("hits", [])
 
         if not hits:
-            logging.warning(f"Index {INDEX_NAME_VAT_RATE} exists but contains no VAT rates")
+            logging.warning(
+                f"Index {INDEX_NAME_VAT_RATE} exists but contains no VAT rates"
+            )
             raise Exception("No VAT rates found in index")
 
         while hits:
@@ -141,18 +151,19 @@ def fetch_vat_rates(client) -> dict:
 
     return vat_dict
 
-def check_existing_documents(client: Any, index_name: str, document_ids: List[str]) -> set:
+
+def check_existing_documents(
+    client: Any, index_name: str, document_ids: List[str]
+) -> set:
     existing_ids = set()
     batch_size = 500
 
     for i in range(0, len(document_ids), batch_size):
-        batch_ids = document_ids[i:i + batch_size]
+        batch_ids = document_ids[i : i + batch_size]
 
         try:
             response = client.mget(
-                index=index_name,
-                body={"ids": batch_ids},
-                _source=False
+                index=index_name, body={"ids": batch_ids}, _source=False
             )
 
             for doc in response.get("docs", []):
@@ -161,16 +172,19 @@ def check_existing_documents(client: Any, index_name: str, document_ids: List[st
 
             if (i // batch_size) % 10 == 0:
                 logging.info(
-                    f"Checked batch {i // batch_size + 1}/{(len(document_ids) - 1) // batch_size + 1}: {len(existing_ids)} existing so far")
-
+                    f"Checked batch {i // batch_size + 1}/{(len(document_ids) - 1) // batch_size + 1}: {len(existing_ids)} existing so far"
+                )
 
         except Exception as e:
             logging.error(f"Failed to check document existence for batch: {str(e)}")
 
-    logging.info(f"Found {len(existing_ids)} existing documents out of {len(document_ids)} total")
+    logging.info(
+        f"Found {len(existing_ids)} existing documents out of {len(document_ids)} total"
+    )
     return existing_ids
 
-def update_in_es_callable(**context) -> None:
+
+def update_in_es_callable() -> None:
     try:
         logging.info("Starting product update process (existing documents only)")
 
@@ -189,7 +203,9 @@ def update_in_es_callable(**context) -> None:
             logging.warning("No product mappings found to update")
             return
 
-        mapping_ids = [str(item.get("id")) for item in product_mappings if item.get("id")]
+        mapping_ids = [
+            str(item.get("id")) for item in product_mappings if item.get("id")
+        ]
         logging.info(f"Checking existence for {len(mapping_ids)} product IDs")
 
         existing_ids = check_existing_documents(client, INDEX_NAME, mapping_ids)
@@ -216,14 +232,16 @@ def update_in_es_callable(**context) -> None:
                 if not doc:
                     continue
 
-                actions.append({
-                    "_op_type": "update",
-                    "_index": INDEX_NAME,
-                    "_id": pid,
-                    "doc": doc,
-                    "doc_as_upsert": False,
-                    "retry_on_conflict": 3,
-                })
+                actions.append(
+                    {
+                        "_op_type": "update",
+                        "_index": INDEX_NAME,
+                        "_id": pid,
+                        "doc": doc,
+                        "doc_as_upsert": False,
+                        "retry_on_conflict": 3,
+                    }
+                )
 
         logging.info(f"Preparing to update {len(actions)} existing products")
 
@@ -231,35 +249,40 @@ def update_in_es_callable(**context) -> None:
         all_errors = []
 
         for i in range(0, len(actions), BATCH_SIZE):
-            batch = actions[i:i + BATCH_SIZE]
+            batch = actions[i : i + BATCH_SIZE]
 
             try:
                 success, errors = helpers.bulk(
-                    client,
-                    batch,
-                    refresh=False,
-                    stats_only=False,
-                    request_timeout=60
+                    client, batch, refresh=False, stats_only=False, request_timeout=60
                 )
 
                 total_success += success
                 if (i // BATCH_SIZE) % 10 == 0:
-                    logging.info(f"Product batch {i // BATCH_SIZE + 1}: {success} documents updated")
+                    logging.info(
+                        f"Product batch {i // BATCH_SIZE + 1}: {success} documents updated"
+                    )
 
                 if errors:
-                    logging.error(f"Product batch {i // BATCH_SIZE + 1} had {len(errors)} errors")
+                    logging.error(
+                        f"Product batch {i // BATCH_SIZE + 1} had {len(errors)} errors"
+                    )
                     all_errors.extend(errors)
 
             except Exception as bulk_error:
-                logging.error(f"Bulk operation failed for product batch {i // BATCH_SIZE + 1}: {str(bulk_error)}")
-                all_errors.append({"batch": i // BATCH_SIZE + 1, "error": str(bulk_error)})
+                logging.error(
+                    f"Bulk operation failed for product batch {i // BATCH_SIZE + 1}: {str(bulk_error)}"
+                )
+                all_errors.append(
+                    {"batch": i // BATCH_SIZE + 1, "error": str(bulk_error)}
+                )
 
             time.sleep(0.1)
 
         client.indices.refresh(index=INDEX_NAME)
 
         logging.info(
-            f"Product update completed: {total_success}/{len(existing_ids)} existing products updated, {len(all_errors)} errors")
+            f"Product update completed: {total_success}/{len(existing_ids)} existing products updated, {len(all_errors)} errors"
+        )
 
     except Exception as e:
         logging.error(f"Product update process failed: {str(e)}")
@@ -267,13 +290,19 @@ def update_in_es_callable(**context) -> None:
 
 
 with DAG(
-        dag_id=DAG_ID,
-        default_args=default_args,
-        schedule="40 * * * *",
-        start_date=datetime(2025, 10, 31),
-        catchup=False,
-        max_active_runs=1,
-        tags=["1c", "elasticsearch", "product", "measurement_unit", "okei_code", "vat", "shop"],
+    dag_id=DAG_ID,
+    default_args=default_args,
+    schedule="40 * * * *",
+    start_date=datetime(2025, 10, 31),
+    catchup=False,
+    max_active_runs=1,
+    tags=[
+        "1c",
+        "elasticsearch",
+        "product",
+        "measurement_unit",
+        "vat",
+    ],
 ) as dag:
 
     fetch_products = PythonOperator(

@@ -27,7 +27,7 @@ default_args = {
 
 DAG_ID = "product_shop_fields"
 
-INDEX_NAME = "product_test"
+INDEX_NAME = "product_v2"
 INDEX_NAME_VAT_RATE = "product_vat"
 
 S3_FILE_NAME = f"{DAG_ID}/product_mappings.json"

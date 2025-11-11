@@ -3,9 +3,9 @@ from datetime import datetime, timedelta
 from typing import List, Any
 import time
 
-from airflow import DAG
-from airflow.models import Variable
+from airflow.sdk import DAG, Variable
 from airflow.providers.standard.operators.python import PythonOperator
+
 from elasticsearch import helpers
 
 from helpers.utils import (
@@ -36,15 +36,16 @@ BATCH_SIZE = 250
 
 
 def fetch_products_and_create_mappings() -> None:
+    logging.info("starting products fetch and mapping")
+
     try:
-        logging.info("Starting products fetch and mapping")
         client = elastic_conn(Variable.get("elastic_scheme"))
 
         vat_dict = fetch_vat_rates(client)
 
         if not vat_dict:
-            logging.error("No VAT rates fetched - this is required data")
-            raise Exception("Cannot proceed without VAT rates data")
+            logging.error("no VAT rates fetched - this is required data")
+            raise
 
         response = request_to_onec_proxy(
             body={
@@ -56,15 +57,13 @@ def fetch_products_and_create_mappings() -> None:
         )
 
         if not response.get("success", False):
-            logging.error(
-                f"Failed to fetch product, success: {response.get('success', False)}, response: {str(response)[:2000]}"
-            )
+            logging.error(f"failed to fetch product, response={str(response)[:2000]}")
             raise
 
         products = response.get("data", [])
 
         if not products:
-            logging.error("No product data received from 1C API")
+            logging.error("no product data received from 1C API")
             raise
 
         product_mappings = []
@@ -89,19 +88,21 @@ def fetch_products_and_create_mappings() -> None:
             product_mappings.append(mapping)
 
         if skipped_products > 0:
-            logging.warning(f"Skipped {skipped_products} products without ID")
+            logging.warning(
+                f"skipped products_count={skipped_products}, with no product_id"
+            )
 
         put_to_s3(data=product_mappings, s3_key=S3_FILE_NAME)
 
         logging.info(
-            f"Successfully created mappings for {len(product_mappings)} products"
+            f"successfully created mappings for products_count={len(product_mappings)}"
         )
         logging.info(
-            f"VAT rate mapping coverage: {len([m for m in product_mappings if m['vat_rate']])}/{len(product_mappings)} products have VAT rates"
+            f"VAT rate mapping coverage={len([m for m in product_mappings if m['vat_rate']])}/{len(product_mappings)} products have VAT rates"
         )
 
     except Exception as e:
-        logging.error(f"Failed to fetch products and create mappings: {str(e)}")
+        logging.error(f"failed to fetch products and create mappings: {str(e)}")
         raise
 
 
@@ -112,7 +113,7 @@ def fetch_vat_rates(client) -> dict:
     try:
         if not client.indices.exists(index=INDEX_NAME_VAT_RATE):
             logging.error(f"Index {INDEX_NAME_VAT_RATE} does not exist")
-            raise Exception(f"Required index {INDEX_NAME_VAT_RATE} not found")
+            raise
 
         query = {"query": {"match_all": {}}, "size": 100}
         response = client.search(index=INDEX_NAME_VAT_RATE, body=query, scroll="2m")
@@ -120,10 +121,10 @@ def fetch_vat_rates(client) -> dict:
         hits = response.get("hits", {}).get("hits", [])
 
         if not hits:
-            logging.warning(
-                f"Index {INDEX_NAME_VAT_RATE} exists but contains no VAT rates"
+            logging.error(
+                f"index {INDEX_NAME_VAT_RATE} exists but contains no VAT rates"
             )
-            raise Exception("No VAT rates found in index")
+            raise
 
         while hits:
             for hit in hits:
@@ -136,10 +137,10 @@ def fetch_vat_rates(client) -> dict:
             scroll_id = response.get("_scroll_id")
             hits = response.get("hits", {}).get("hits", [])
 
-        logging.info(f"Loaded {len(vat_dict)} VAT rates from Elasticsearch")
+        logging.info(f"loaded {len(vat_dict)} VAT rates")
 
     except Exception as e:
-        logging.error(f"Failed to fetch VAT rates from Elasticsearch: {str(e)}")
+        logging.error(f"failed to fetch VAT rates: {str(e)}")
         raise
 
     finally:
@@ -147,7 +148,7 @@ def fetch_vat_rates(client) -> dict:
             try:
                 client.clear_scroll(scroll_id=scroll_id)
             except Exception as e:
-                logging.debug(f"Scroll cleanup failed: {str(e)}")
+                logging.debug(f"scroll cleanup failed: {str(e)}")
 
     return vat_dict
 
@@ -172,46 +173,46 @@ def check_existing_documents(
 
             if (i // batch_size) % 10 == 0:
                 logging.info(
-                    f"Checked batch {i // batch_size + 1}/{(len(document_ids) - 1) // batch_size + 1}: {len(existing_ids)} existing so far"
+                    f"checked batch {i // batch_size + 1}/{(len(document_ids) - 1) // batch_size + 1}: {len(existing_ids)} existing so far"
                 )
 
         except Exception as e:
-            logging.error(f"Failed to check document existence for batch: {str(e)}")
+            logging.error(f"failed to check document existence for batch: {str(e)}")
 
     logging.info(
-        f"Found {len(existing_ids)} existing documents out of {len(document_ids)} total"
+        f"found {len(existing_ids)} existing documents out of {len(document_ids)} total"
     )
     return existing_ids
 
 
 def update_in_es_callable() -> None:
-    try:
-        logging.info("Starting product update process (existing documents only)")
+    logging.info("Starting product update process (existing documents only)")
 
+    try:
         client = elastic_conn(Variable.get("elastic_scheme"))
 
         try:
             client.info()
         except Exception as e:
-            logging.error("Elasticsearch not available: %s", e)
+            logging.error("elasticsearch not available: %s", e)
             raise
-        logging.info("Elasticsearch connection established")
+        logging.info("elasticsearch connection established")
 
         product_mappings = get_from_s3(s3_key=S3_FILE_NAME) or []
 
         if not product_mappings:
-            logging.warning("No product mappings found to update")
+            logging.warning("no product mappings found to update")
             return
 
         mapping_ids = [
             str(item.get("id")) for item in product_mappings if item.get("id")
         ]
-        logging.info(f"Checking existence for {len(mapping_ids)} product IDs")
+        logging.info(f"checking existence for {len(mapping_ids)} product IDs")
 
         existing_ids = check_existing_documents(client, INDEX_NAME, mapping_ids)
 
         if not existing_ids:
-            logging.warning("No existing products found to update")
+            logging.warning("no existing products found to update")
             return
 
         actions = []
@@ -222,12 +223,12 @@ def update_in_es_callable() -> None:
             pid = str(product_id)
             if pid in existing_ids:
                 doc = {}
-                okei = mapping.get("okei_code")
-                if okei is not None:
-                    doc["okei_code"] = okei
-                vat_val = mapping.get("vat_rate")
-                if vat_val:
-                    doc["vat_rate"] = vat_val
+
+                if "okei_code" in mapping:
+                    doc["okei_code"] = mapping.get("okei_code")
+
+                if "vat_rate" in mapping:
+                    doc["vat_rate"] = mapping.get("vat_rate")
 
                 if not doc:
                     continue

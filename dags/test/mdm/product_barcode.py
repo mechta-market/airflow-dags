@@ -24,7 +24,7 @@ default_args = {
 }
 
 DICTIONARY_NAME = "product_barcode"
-INDEX_NAME = "product_barcode"
+INDEX_NAME = DICTIONARY_NAME
 
 S3_FILE_NAME = f"{DAG_ID}/product_barcode.json"
 
